@@ -1,9 +1,16 @@
 {
 	"python.defaultInterpreterPath": "/Users/alexander/vnv/ww/bin/python",
-
 	"python.languageServer": "Pylance",
 	"python.jediEnabled": false,
-	"python.analysis.typeCheckingMode": "basic",
+	// "python.analysis.typeCheckingMode": "basic",         // keep type checking minimal
+	"python.analysis.typeCheckingMode": "off",
+
+	"python.analysis.diagnosticSeverityOverrides": {
+		// "reportGeneralTypeIssues": "none",
+		"reportUndefinedVariable": true,
+		"reportMissingImports": true,
+		"reportAttributeAccessIssue": "none"
+	},
 
 	"python.testing.pytestArgs": [
 		"tests"
@@ -12,5 +19,45 @@
 	"python.testing.pytestEnabled": true,
 
 	"debug.internalConsoleOptions": "neverOpen",
-	"editor.bracketPairColorization.enabled": false
+	"editor.bracketPairColorization.enabled": false,
+	"editor.insertSpaces": false,
+	"editor.detectIndentation": false,
+	"editor.tabSize": 4,
+
+
+	// --- Zen additions below ---
+
+	// Remove “modified” borders/colors on tabs
+   "workbench.colorCustomizations": {
+		// Tab borders
+		"tab.activeModifiedBorder": "#00000000",
+		"tab.inactiveModifiedBorder": "#00000000",
+		"tab.unfocusedActiveModifiedBorder": "#00000000",
+		// Tab backgrounds
+		"tab.activeBackground": "#1e1e1e",
+		"tab.inactiveBackground": "#2d2d2d",
+		"tab.unfocusedActiveBackground": "#2d2d2d",
+		"tab.unfocusedInactiveBackground": "#2d2d2d",
+		"tab.activeModifiedBackground": "#1e1e1e",
+		"tab.inactiveModifiedBackground": "#2d2d2d",
+		"tab.unfocusedActiveModifiedBackground": "#2d2d2d",
+		"tab.unfocusedInactiveModifiedBackground": "#2d2d2d",
+		// Tab text (foreground)
+		"tab.activeModifiedForeground": "#c0c0c0",
+		"tab.inactiveModifiedForeground": "#a0a0a0",
+		"tab.unfocusedActiveModifiedForeground": "#a0a0a0",
+		"tab.unfocusedInactiveModifiedForeground": "#a0a0a0",
+		// Explorer as backup
+		"explorer.decorations.colors": false
+	},
+
+
+	// Remove decorations in file explorer for git/diff/unsaved
+	"explorer.decorations.colors": false,
+
+	// Optional: Remove git-based colorings elsewhere
+	"git.decorations.enabled": false,
+
+	// Optional: Make Pylance even less intrusive (diagnostics only for open files)
+	"python.analysis.diagnosticMode": "openFilesOnly"
 }

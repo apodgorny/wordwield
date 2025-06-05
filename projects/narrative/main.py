@@ -21,5 +21,12 @@ from operators import (
 print('and here')
 ################################################################
 
+ww.init(
+	PROJECT_NAME  = 'Narrative',
+	PROJECT_PATH  = os.path.abspath(os.path.dirname(__file__)),
+	LOG_DIR       = 'logs',
+	EXPERTISE_DIR = 'expertise'
+)
+
 ww.verbose = True
 result = ww.invoke(Pipeline, name='pipeline')

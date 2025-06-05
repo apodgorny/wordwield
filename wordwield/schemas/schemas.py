@@ -40,3 +40,9 @@ class OperatorSchema(O):
 
 class OperatorsSchema(O):
 	items: List[OperatorSchema]
+
+class ProjectConfigSchema(O):
+	PROJECT_NAME  : str
+	PROJECT_PATH  : str
+	EXPERTISE_DIR : str
+	LOG_DIR       : str

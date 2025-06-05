@@ -181,9 +181,9 @@ class Python:
 				raise ValueError(f'Class `{operator_class_name}` not found')
 
 			instance = operator_class(operator_name, self.globals)
-			invoke_method = getattr(instance, 'invoke', None)
+			invoke_method = getattr(instance, 'invoke_decorator', None)
 			if not invoke_method:
-				raise ValueError(f'Method `invoke` not found in `{operator_class_name}`')
+				raise ValueError(f'Method `invoke_decorator` not found in `{operator_class_name}`')
 
 			return await invoke_method(**input_dict)
 		finally:

@@ -28,6 +28,7 @@ class RuntimeService(DapiService):
 
 	def get_globals(self, context=None, type_classes=None):
 		operator_globals = {
+			'PROJECT'      : self.dapi.project,
 			'Operator'     : Operator,
 			'Agent'        : Agent,
 			'Expert'       : Expert,

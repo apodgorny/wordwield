@@ -27,12 +27,8 @@ app.add_middleware(
 )
 dapi.start(app)
 
-@app.on_event('startup')
-async def startup_event():
-	await dapi.initialize_services()
+# @app.exception_handler(DapiException)
+# async def dapi_exception_handler(request: Request, exc: DapiException):
+# 	return exc.to_response()
 
-@app.exception_handler(DapiException)
-async def dapi_exception_handler(request: Request, exc: DapiException):
-	return exc.to_response()
-
-__all__ = ["app"]
+# __all__ = ["app"]

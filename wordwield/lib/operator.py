@@ -8,12 +8,6 @@ from .autoargs          import autodecorate
 from .execution_context import ExecutionContext
 
 
-LOG_PATH = os.path.join(
-	os.environ.get('PROJECT_PATH'),
-	os.environ.get('LOG_DIR')
-)
-
-
 class Operator:
 	'''Base interface for any executable operator: static, dynamic, composite.'''
 
@@ -36,6 +30,7 @@ class Operator:
 	def __init__(self, name, globals):
 		self.name    = name
 		self.globals = globals
+		self.project = self.globals['PROJECT']
 
 		if not (
 			hasattr(self.__class__, 'InputType')             and
@@ -53,7 +48,7 @@ class Operator:
 
 	def log(self, *args, name=None, clear=False, timestamp=False):
 		file_name = f'{self.name}.{name}.log' if name else f'{self.name}.log'
-		filepath  = os.path.join(LOG_PATH, file_name)
+		filepath  = os.path.join(self.project['LOG_PATH'], file_name)
 		mode      = 'w' if clear else 'a'
 		value     = '\n'.join([arg.strip() if isinstance(arg, str) else json.dumps(arg, ensure_ascii=False, indent=4)for arg in args])
 
@@ -68,6 +63,9 @@ class Operator:
 
 	async def call(self, name, **kwargs):
 		return await self.globals['call'](name, *[], **kwargs)
+	
+	async def invoke_decorator(self, *args, **kwargs):
+		return await self.invoke(*args, **kwargs)
 
 	async def invoke(self):
 		'''Execute operator and return output.'''

@@ -6,4 +6,5 @@ from .schemas import (
 	OperatorSchema,
 	OperatorsSchema,
 	OutputSchema,
+	ProjectConfigSchema
 )

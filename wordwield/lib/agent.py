@@ -1,4 +1,4 @@
-import re, json
+import os, re, json, inspect
 
 from .operator  import Operator
 from .string    import String
@@ -8,29 +8,41 @@ from .t         import T
 
 class Agent(Operator):
 
-	def _get_template(self):
-		if not hasattr(self, 'template'):
-			raise ValueError(f'Property `template` is not defined in `{self.__class__.__name__}`')
-		return self.template
+	@property
+	def expertise(self) -> str | None:
+		cls_name = String.camel_to_snake(self.__class__.__name__)
+		for ext in ['.md', '.txt']:
+			path = os.path.join(self.project['EXPERTISE_PATH'], f'{cls_name}{ext}')
+			if os.path.exists(path):
+				with open(path, 'r', encoding='utf-8') as f:
+					return f.read()
+		return None
 
-	def _get_promptlets(self) -> dict:
-		return {
+	async def _get_promptlets(self) -> dict:
+		props = {
 			name: getattr(self, name)
 			for name in dir(self.__class__)
 			if isinstance(getattr(self.__class__, name), property)
 		}
+		result = {}
+		for name, value in props.items():
+			# If value is a coroutine function, await it
+			if inspect.isawaitable(value):
+				value = await value
+			result[name] = value
+		return result
 
 	def fill(self, template: str, **vars) -> str:
 		template = String.unindent(template)
 		matches  = set(re.findall(r'\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}', template))
-		all_vars = {**self._get_promptlets(), **vars}
+		all_vars = {**self._promptlets, **vars}
 
 		for path in matches:
 			if path not in all_vars:
 				raise ValueError(f'[LLM] Field `{path}` mentioned in template, but not supplied')
 
 			# Convert all pydantic/o objects in data into plain data
-			value = T(T.PYDANTIC, T.DATA, all_vars[path])
+			value = T(T.PYDANTIC, T.DATA, all_vars[path]) # type: ignore
 
 			if isinstance(value, (dict, list)):
 				value = json.dumps(value, indent=4, ensure_ascii=False)
@@ -41,9 +53,9 @@ class Agent(Operator):
 
 		return template
 
-	async def ask(self, prompt = None, schema = None, output_repr=True):
+	async def ask(self, prompt = '', schema = None, output_repr=True):
 		hr     = '-' * 40
-		schema = schema or self.OutputType
+		schema = schema or self.OutputType # type: ignore
 		if output_repr:
 			prompt = prompt + '\nPut all data into JSON:\n' + schema.to_schema_prompt()
 
@@ -56,3 +68,7 @@ class Agent(Operator):
 
 		self.log('OUTPUT', output, hr)
 		return output
+
+	async def invoke_decorator(self, *args, **kwargs):
+		self._promptlets = await self._get_promptlets()
+		return await self.invoke(*args, **kwargs)

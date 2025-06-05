@@ -15,6 +15,7 @@ os.environ['CLIENT'] = __file__
 class WordWield:
 	verbose        = False
 	is_initialized = False
+	config         = {}
 
 	# Private methods
 	############################################################################
@@ -82,12 +83,17 @@ class WordWield:
 	############################################################################
 
 	@classmethod
-	def init(cls):
-		print('init')
-		'''Create all Operator and O-descendant types defined in the caller scope.'''
-		# frame     = inspect.currentframe().f_back.f_back
-		# module    = inspect.getmodule(frame)
-		# objects   = vars(sys.modules[module.__name__])
+	def init(cls, **kwargs):
+		cls.config = kwargs or {}
+
+		# POST project config to /init endpoint
+		try:
+			resp = cls.request('POST', '/init', json=cls.config)
+			cls.success(f'Project config initialized: {resp}')
+		except Exception as e:
+			cls.error('halt', f'Failed to init project config: {e}')
+
+		# Create all Operator and O-descendant types defined in the caller scope.
 		objects   = Code.collect_all_objects()
 		operators = Code.collect_operators(objects)
 		Code.collect_types(objects)  # populates type_pool including nested
@@ -178,7 +184,7 @@ class WordWield:
 	@classmethod
 	def invoke(cls, operator: Operator, *args, **kwargs):
 		if not cls.is_initialized:
-			cls.init()
+			cls.error('halt', 'Wordwield is not initialized')
 
 		name = String.camel_to_snake(operator.__name__)
 

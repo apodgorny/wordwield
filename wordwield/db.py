@@ -9,22 +9,7 @@ from sqlalchemy.orm                 import Mapped, mapped_column, sessionmaker
 from sqlalchemy.ext.mutable         import MutableDict
 from sqlalchemy.dialects.postgresql import UUID
 
-from wordwield.lib.record           import Record, Base
-
-
-load_dotenv()
-
-PROJECT_PATH          = os.getenv('PROJECT_PATH')
-DB_NAME               = os.getenv('DB_NAME')
-DB_URL                = f'sqlite:///./{DB_NAME}.db'
-DB_PATH               = os.path.join(PROJECT_PATH, f'{DB_NAME}.db')
-engine                = create_engine(DB_URL, connect_args={'check_same_thread': False}, echo=False)
-SessionLocal          = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-session               = SessionLocal()
-
-if os.path.exists(DB_PATH):
-	if not os.access(DB_PATH, os.W_OK):
-		raise RuntimeError(f'❌ Cannot write to DB file: `{DB_PATH}` — it is read-only.')
+from wordwield.lib.record           import Record
 
 
 class TypeRecord(Record):

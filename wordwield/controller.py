@@ -9,7 +9,8 @@ from wordwield.schemas   import (
 	TypeSchema,
 	OperatorSchema,
 	OperatorsSchema,
-	OutputSchema
+	OutputSchema,
+	ProjectConfigSchema
 )
 
 dapi = Dapi(
@@ -21,6 +22,12 @@ dapi = Dapi(
 
 # DEFINITION endpoints
 ############################################################################
+
+@dapi.router.post('/init', response_model=StatusSchema)
+async def init_project(input: ProjectConfigSchema):
+	await dapi.set_project(**input.to_dict())
+	print('[INIT] Project config received:', input.to_json())
+	return {'status': 'success'}
 
 @dapi.router.post('/create_type',                     response_model=TypeSchema)
 @dapi.router.post('/create_type/{type_name}',         response_model=TypeSchema)
