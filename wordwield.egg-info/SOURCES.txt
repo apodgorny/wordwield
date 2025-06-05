@@ -1,0 +1,10 @@
+LICENSE_DAPI_CC_BY_4.0.txt
+README.md
+pyproject.toml
+wordwield/__init__.py
+wordwield.egg-info/PKG-INFO
+wordwield.egg-info/SOURCES.txt
+wordwield.egg-info/dependency_links.txt
+wordwield.egg-info/entry_points.txt
+wordwield.egg-info/requires.txt
+wordwield.egg-info/top_level.txt

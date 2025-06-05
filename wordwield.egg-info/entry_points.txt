@@ -1,0 +1,2 @@
+[console_scripts]
+ww = wordwield.__main__:main

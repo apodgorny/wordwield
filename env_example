@@ -1,0 +1,15 @@
+PROJECT_PATH  = '<PATH_TO_DAPI_REPO_ROOT>'
+DAPI_URL      = 'http://localhost:8000/dapi'
+
+DB_HOST       = 'localhost'
+DB_PORT       = 5432
+DB_NAME       = 'dapi'
+DB_USER       = 'dapi'
+DB_PASSWORD   = 'dapi'
+DB_URL        = 'sqlite:///./dapi.db'
+
+OPERATORS_DIR = 'operators'
+MODELS_DIR    = 'dapi/models/'
+
+DATA_DIR      = 'client/data/'
+LOG_DIR       = 'client/logs/'

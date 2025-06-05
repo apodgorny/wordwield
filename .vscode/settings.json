@@ -1,0 +1,16 @@
+{
+	"python.defaultInterpreterPath": "/Users/alexander/vnv/ww/bin/python",
+
+	"python.languageServer": "Pylance",
+	"python.jediEnabled": false,
+	"python.analysis.typeCheckingMode": "basic",
+
+	"python.testing.pytestArgs": [
+		"tests"
+	],
+	"python.testing.unittestEnabled": false,
+	"python.testing.pytestEnabled": true,
+
+	"debug.internalConsoleOptions": "neverOpen",
+	"editor.bracketPairColorization.enabled": false
+}
