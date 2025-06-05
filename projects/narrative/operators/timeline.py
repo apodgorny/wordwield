@@ -1,9 +1,7 @@
 from wordwield.lib import O, Agent, Operator
 
 from schemas.schemas import (
-	BeatSchema,
 	TimelineSchema,
-	ThreadSchema
 )
 
 class Timeline(Operator):

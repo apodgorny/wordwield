@@ -11,12 +11,6 @@ if ROOT not in sys.path:
 
 from wordwield import ww
 
-from schemas.schemas import (
-	BeatSchema,
-	TimelineSchema,
-	ThreadSchema,
-	VoiceSchema
-)
 from operators import (
 	Timeline
 )
@@ -31,4 +25,4 @@ ww.init(
 )
 
 ww.verbose = True
-result = ww.invoke(Timeline, name='pipeline')
+result = ww.invoke(Timeline, name=PROJECT_NAME)

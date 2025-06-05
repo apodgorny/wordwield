@@ -35,7 +35,7 @@ class SituationSchema(O):
     characters : list[CharacterSchema]    = O.Field(semantic=True, description='Characters involved in the situation')
 
 class SceneSchema(O):
-    title    : str            = O.Field(semantic=True, description='Scene title')
+    title    : str             = O.Field(semantic=True, description='Scene title')
     start    : SituationSchema = O.Field(semantic=True, description='Initial situation')
     end      : SituationSchema = O.Field(semantic=True, description='Final situation')
     timeline : TimelineSchema  = O.Field(semantic=True, description='Timeline of the scene')

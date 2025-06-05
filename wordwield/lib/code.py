@@ -1,4 +1,4 @@
-import inspect
+import sys, inspect
 
 from .operator import Operator
 from .o        import O
@@ -35,26 +35,18 @@ class Code:
 
 	@staticmethod
 	def collect_all_objects():
-		import sys
-		module  = sys.modules['__main__']
-		objs    = {}
-		visited = set()
-
-		def recurse(mod):
-			if not hasattr(mod, '__name__'):
-				return
-			if mod.__name__ in visited:
-				return
-			visited.add(mod.__name__)
-			objs.update(vars(mod))
-			for name in dir(mod):
-				attr = getattr(mod, name, None)
-				if inspect.ismodule(attr) and attr.__name__.startswith(module.__name__):
-					recurse(attr)
-
-		recurse(module)
+		objs = {}
+		for mod in list(sys.modules.values()):
+			if not hasattr(mod, '__file__'):
+				continue  # skip built-ins and system modules
+			# Optionally filter by project prefix:
+			#if not (mod.__name__.startswith('operators') or mod.__name__.startswith('schemas') or mod.__name__.startswith('wordwield')):
+			#	continue
+			try:
+				objs.update(vars(mod))
+			except Exception:
+				pass  # Sometimes a module fails vars() (rare but safe to skip)
 		return objs
-
 
 	@staticmethod
 	def collect_operators(objects):
@@ -63,9 +55,9 @@ class Code:
 		for name, obj in objects.items():
 			if not inspect.isclass(obj):
 				continue
-			if not issubclass(obj, Operator):
-				continue
 			if obj is Operator:
+				continue
+			if not issubclass(obj, Operator):
 				continue
 			if name in ['Agent', 'Expert']:
 				continue
@@ -89,8 +81,8 @@ class Code:
 			if name in seen:
 				return seen[name]
 
-			if not inspect.isclass(cls) or not issubclass(cls, O):
-				raise TypeError(f'Cannot collect non-O type: {cls}')
+			if not inspect.isclass(cls) or not issubclass(cls, O) or cls is O:
+				return None
 
 			entry = {
 				'name'        : name,
@@ -103,12 +95,8 @@ class Code:
 			seen[name] = entry
 			return entry
 
-		#################################
-
 		for name, obj in objects.items():
 			if inspect.isclass(obj):
-				if issubclass(obj, O) and obj is not O:
-					collect(obj)
+				collect(obj)
 
 		return list(Code.type_pool.values())
-
