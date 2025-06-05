@@ -1,4 +1,4 @@
-import os, sys, inspect, httpx, ast, json
+import os, httpx, ast, json
 
 from pathlib  import Path
 from pydantic import BaseModel
@@ -22,13 +22,13 @@ class WordWield:
 
 	@staticmethod
 	def _create_type(type_dict):
-		res = WordWield.request('POST', '/create_type', json=type_dict)
+		res = WordWield.request('POST', f'/create_type/{type_dict["name"]}', json=type_dict)
 		WordWield.success(f'Type `{type_dict["name"]}` created')
 		return res
 
 	@staticmethod
 	def _create_operator(operator_dict):
-		res = WordWield.request('POST', '/create_operator', json=operator_dict)
+		res = WordWield.request('POST', f'/create_operator/{operator_dict["name"]}', json=operator_dict)
 		WordWield.success(f'Operator `{operator_dict["name"]}` created')
 		return res
 
@@ -133,8 +133,7 @@ class WordWield:
 
 	@staticmethod
 	def request(method: str, path: str, **kwargs):
-		url_name = kwargs.get('json', {}).get('name', '')
-		url      = '/'.join([DAPI_URL, path.lstrip('/'), url_name]).strip('/')
+		url      = '/'.join([DAPI_URL, path.lstrip('/')]).strip('/')
 		kwargs.setdefault('timeout', 1200.0)
 
 		if WordWield.verbose:

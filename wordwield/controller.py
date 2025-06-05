@@ -63,6 +63,7 @@ async def delete_operator(input: NameSchema):
 @dapi.router.post('/{operator_name}',                  include_in_schema=False)
 @dapi.router.post('/{operator_name}/{operator_name1}', include_in_schema=False)
 async def dynamic_operator_handler(operator_name: str, input: dict):
+	print(f'Invoking operator `{operator_name}`')
 	context = ExecutionContext()
 	result  = await dapi.runtime_service.invoke(operator_name, input, context)
 	return OutputSchema(output=result if isinstance(result, dict) else {})
