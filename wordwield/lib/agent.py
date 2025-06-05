@@ -1,9 +1,9 @@
 import re, json
 
 from .operator  import Operator
-from .o         import O
 from .string    import String
-from .transform import T
+from .o         import O
+from .t         import T
 
 
 class Agent(Operator):
@@ -30,7 +30,7 @@ class Agent(Operator):
 				raise ValueError(f'[LLM] Field `{path}` mentioned in template, but not supplied')
 
 			# Convert all pydantic/o objects in data into plain data
-			value = T(T.PYDANTIC, T.DATA, vars[path])
+			value = T(T.PYDANTIC, T.DATA, all_vars[path])
 
 			if isinstance(value, (dict, list)):
 				value = json.dumps(value, indent=4, ensure_ascii=False)

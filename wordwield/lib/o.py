@@ -3,8 +3,8 @@ from typing   import Any, get_args, get_origin, Union, List, Dict
 
 from pydantic import BaseModel, Field, model_validator
 
-from .transform import T
-from .odb       import ODB
+from .t   import T
+from .odb import ODB
 
 
 class O(BaseModel):

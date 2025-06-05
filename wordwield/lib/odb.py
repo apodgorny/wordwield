@@ -2,7 +2,7 @@ from sqlalchemy          import inspect
 from sqlalchemy.orm      import Session
 
 from typing                    import get_origin, List, Dict
-from wordwield.lib.transform   import T
+from wordwield.lib.t           import T
 from wordwield.lib.edge        import Edge
 from wordwield.db              import EdgeRecord
 
