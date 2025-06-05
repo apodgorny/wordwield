@@ -102,7 +102,6 @@ class WordWield:
 			WordWield._create_type(type_def)
 
 		for op_def in operators:
-			print(op_def)
 			WordWield._create_operator(op_def)
 
 		cls.is_initialized = True

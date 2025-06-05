@@ -69,29 +69,9 @@ class DefinitionService(DapiService):
 	async def get_operator_sources(self) -> list[str]:
 		return [op['name'] for op in await self.get_all()]
 
-	async def delete(self, name: str) -> None:
-		record = self.require(name)
-		self.dapi.db.delete(record)
-		self.dapi.db.commit()
-
-	async def delete_all(self) -> None:
-		'''Delete all restricted operators.'''
-		try:
-			self.dapi.db.query(OperatorRecord)             \
-				.filter(OperatorRecord.restrict.is_(True)) \
-				.delete(synchronize_session=False)
-			self.dapi.db.commit()
-		except Exception as e:
-			if 'database is locked' in str(e):
-				raise RuntimeError('❌ SQLite database is locked. Close other connections or wait.')
-			else:
-				raise
-
 	############################################################################
 
 	async def register_plugin_operators(self):
-		await self.delete_all()
-
 		classes = Module.load_package_classes(Operator, OPERATOR_DIR)
 
 		print(String.underlined('\nUnrestricted operators:'))

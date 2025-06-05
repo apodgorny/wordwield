@@ -1,1 +1,1 @@
-from .pipeline import Pipeline, Test
+from .timeline import Timeline

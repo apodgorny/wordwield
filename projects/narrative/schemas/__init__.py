@@ -1,8 +1,8 @@
 from .schemas import (
+	TimelineSchema,
+	ThreadSchema,
 	VoiceSchema,
 	BeatSchema,
-	ThreadSchema,
-	TimelineSchema,
 	CharacterSchema,
 	SituationSchema,
 	SceneSchema

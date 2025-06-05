@@ -24,9 +24,32 @@ class Dapi:
 		self.odb         = ODB
 		self.odb.session = None
 		self.services    = services
-		
+		self.engine      = None  # Save engine for future use
 
 		print('\nDAPI Controller is initiated\n')
+
+	def init_db(self):
+		'''Delete and (re-)initialize DB engine, session, and create tables.'''
+		db_path = self.project['DB_PATH']
+		db_url  = self.project['DB_URL']
+
+		# If file exists, check writability and remove
+		if os.path.exists(db_path):
+			if not os.access(db_path, os.W_OK):
+				raise RuntimeError(f'❌ Cannot write to DB file: `{db_path}` — it is read-only.')
+			os.remove(db_path)
+		else:
+			parent_dir = os.path.dirname(db_path) or "."
+			if not os.access(parent_dir, os.W_OK):
+				raise RuntimeError(f'❌ Cannot create DB file: Directory `{parent_dir}` is not writable.')
+
+		self.engine  = create_engine(db_url, connect_args={'check_same_thread': False}, echo=False)
+		Session      = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+		session      = Session()
+
+		self.db            = session
+		self.odb.session   = self.db
+		Base.metadata.create_all(bind=self.engine)
 
 	def start(self, app):
 		self.app = app
@@ -41,6 +64,7 @@ class Dapi:
 				await service.initialize()
 
 	async def set_project(self, **kwargs):
+		'''Set up project configuration (paths, etc). And re-create database file'''
 		project_name   = kwargs['PROJECT_NAME']
 		project_path   = kwargs['PROJECT_PATH']
 		log_dir        = kwargs['LOG_DIR']
@@ -52,18 +76,6 @@ class Dapi:
 		db_path        = os.path.join(project_path, db_name)
 		db_url         = f'sqlite:///{db_path}'
 
-		if os.path.exists(db_path) and not os.access(db_path, os.W_OK):
-			raise RuntimeError(f'❌ Cannot write to DB file: `{db_path}` — it is read-only.')
-
-		engine   = create_engine(db_url, connect_args={'check_same_thread': False}, echo=False)
-		Session  = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-		session  = Session()
-
-		self.db  = session
-		self.odb.session = self.db
-
-		Base.metadata.create_all(bind=engine)
-
 		self.project = {
 			**kwargs,
 			'LOG_PATH'       : log_path,
@@ -71,9 +83,8 @@ class Dapi:
 			'DB_PATH'        : db_path,
 			'DB_URL'         : db_url
 		}
-
+		self.init_db()
 		await self.initialize_services()
-
 
 
 ########################################################################		

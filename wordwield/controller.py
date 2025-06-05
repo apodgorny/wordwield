@@ -57,11 +57,6 @@ async def delete_operator(input: NameSchema):
 	await dapi.definition_service.delete(input.name)
 	return {'status': 'success'}
 
-@dapi.router.post('/reset',                           response_model=StatusSchema)
-async def reset_operators(input: EmptySchema):
-	await dapi.definition_service.delete_all()
-	return { 'status' : 'success' }
-
 # RUNTIME invoke
 ############################################################################
 

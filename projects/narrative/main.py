@@ -18,8 +18,7 @@ from schemas.schemas import (
 	VoiceSchema
 )
 from operators import (
-	Pipeline,
-	Test
+	Timeline
 )
 
 ################################################################
@@ -32,4 +31,4 @@ ww.init(
 )
 
 ww.verbose = True
-result = ww.invoke(Pipeline, name='pipeline')
+result = ww.invoke(Timeline, name='pipeline')
