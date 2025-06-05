@@ -1,6 +1,6 @@
-from fastapi.responses import PlainTextResponse
+from fastapi.responses   import PlainTextResponse
 
-from wordwield.lib              import Dapi, ExecutionContext
+from wordwield.lib       import Dapi, ExecutionContext
 from wordwield.services  import DefinitionService, RuntimeService, TypeService
 from wordwield.schemas   import (
 	NameSchema,

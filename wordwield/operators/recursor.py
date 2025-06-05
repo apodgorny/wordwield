@@ -1,6 +1,6 @@
-from pydantic     import BaseModel
-from typing       import Any
-from lib.operator import Operator
+from pydantic      import BaseModel
+from typing        import Any
+from wordwield.lib import Operator
 
 
 class Recursor(Operator):

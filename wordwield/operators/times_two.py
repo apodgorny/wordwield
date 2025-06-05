@@ -1,14 +1,13 @@
-from pydantic     import BaseModel
-from lib.operator import Operator
+from wordwield.lib import Operator, O
 
 
 class TimesTwo(Operator):
 	'''Plugin operator that multiplies input by two.'''
 	
-	class InputType(BaseModel):
+	class InputType(O):
 		x: int
 
-	class OutputType(BaseModel):
+	class OutputType(O):
 		x: int
 	
 	async def invoke(self, x):

@@ -11,7 +11,7 @@ from wordwield.schemas import OperatorSchema
 
 OPERATOR_DIR = os.path.join(
 	os.environ.get('PROJECT_PATH'),
-	os.environ.get('OPERATOR_DIR', 'operators')
+	os.environ.get('OPERATORS_DIR', 'operators')
 )
 
 
@@ -91,6 +91,7 @@ class DefinitionService(DapiService):
 
 	async def register_plugin_operators(self):
 		await self.delete_all()
+
 		classes = Module.load_package_classes(Operator, OPERATOR_DIR)
 
 		print(String.underlined('\nUnrestricted operators:'))
