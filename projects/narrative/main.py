@@ -1,12 +1,15 @@
 import sys, os
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+LOG_DIR       = 'logs'
+EXPERTISE_DIR = 'expertise'
+PROJECT_PATH  = os.path.abspath(os.path.dirname(__file__))
+PROJECT_NAME  = os.path.basename(PROJECT_PATH)
+
+ROOT = os.path.join(PROJECT_PATH, '..', '..')
 if ROOT not in sys.path:
 	sys.path.insert(0, ROOT)
 
 from wordwield import ww
-
-print('here')
 
 from schemas.schemas import (
 	BeatSchema,
@@ -18,14 +21,14 @@ from operators import (
 	Pipeline,
 	Test
 )
-print('and here')
+
 ################################################################
 
 ww.init(
-	PROJECT_NAME  = 'Narrative',
-	PROJECT_PATH  = os.path.abspath(os.path.dirname(__file__)),
-	LOG_DIR       = 'logs',
-	EXPERTISE_DIR = 'expertise'
+	PROJECT_NAME  = PROJECT_NAME,
+	PROJECT_PATH  = PROJECT_PATH,
+	LOG_DIR       = LOG_DIR,
+	EXPERTISE_DIR = EXPERTISE_DIR
 )
 
 ww.verbose = True
