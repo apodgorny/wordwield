@@ -1,11 +1,7 @@
 import os, json
 from datetime import datetime
-from typing import Callable
 
-from .o                 import O
-from .string            import String
-from .autoargs          import autodecorate
-from .execution_context import ExecutionContext
+from .o       import O
 
 
 class Operator:

@@ -21,6 +21,8 @@ class Python:
 		'sum'        : sum,
 		'min'        : min,
 		'max'        : max,
+		'iter'       : iter,
+		'next'       : next,
 
 		'type'       : type,
 		'list'       : list,

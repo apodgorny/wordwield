@@ -84,6 +84,37 @@ class O(BaseModel):
 	@classmethod
 	def load(cls, ref: int | str) -> 'O':
 		return ODB.load(ref, cls)
+	
+	@classmethod
+	def split(cls, by: str):
+		'''
+			Splits the schema into two:
+			- MySchema__True: fields where json_schema_extra[by] is True or missing
+			- MySchema__False: fields where json_schema_extra[by] is explicitly False
+			Returns (MySchema__True, MySchema__False)
+		'''
+		true_fields  = {}
+		false_fields = {}
+		for name, field in cls.model_fields.items():
+			info         = getattr(field, 'json_schema_extra', {}) or {}
+			flag         = info.get(by, True)
+			target       = false_fields if flag is False else true_fields
+			desc         = info.get('description', None)
+			extras       = dict(info)
+			field_kwargs = dict(description=desc, json_schema_extra=extras)
+			default      = field.default if field.default is not None else ...
+			target[name] = (field.annotation, default, field_kwargs)
+
+		def make_schema(suffix, fields):
+			attrs = {}
+			for k, (ann, default, field_kwargs) in fields.items():
+				attrs[k] = Field(default, **field_kwargs)
+			return type(f'{cls.__name__}__{suffix}', (O,), attrs)
+
+		TrueSchema  = make_schema('True',  true_fields)
+		FalseSchema = make_schema('False', false_fields)
+		return TrueSchema, FalseSchema
+
 
 	# Getters
 	############################################################################

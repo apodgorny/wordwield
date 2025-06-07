@@ -3,7 +3,7 @@ from .schemas import (
 	ThreadSchema,
 	VoiceSchema,
 	BeatSchema,
-	CharacterSchema,
+	PersonaSchema,
 	SituationSchema,
-	SceneSchema
+	SceneSchema,
 )

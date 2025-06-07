@@ -31,6 +31,13 @@ class Agent(Operator):
 				value = await value
 			result[name] = value
 		return result
+	
+	def to_promptlets(self, schema: O):
+		'''Add all fields of VoiceSchema as promptlets (for use in fill).'''
+		self._promptlets = {
+			** getattr(self, '_promptlets', {}),  # keep any existing promptlets
+			** schema.model_dump(),               # assumes VoiceSchema is a Pydantic model or similar
+		}
 
 	def fill(self, template: str, **vars) -> str:
 		template = String.unindent(template)
@@ -57,7 +64,7 @@ class Agent(Operator):
 		hr     = '-' * 40
 		schema = schema or self.OutputType # type: ignore
 		if output_repr:
-			prompt = prompt + '\nPut all data into JSON:\n' + schema.to_schema_prompt()
+			prompt = prompt + '\nPut all data into JSON:\n' + schema.split('llm')
 
 		self.log('INPUT', prompt, hr)
 

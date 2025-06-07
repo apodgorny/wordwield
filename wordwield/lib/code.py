@@ -39,9 +39,6 @@ class Code:
 		for mod in list(sys.modules.values()):
 			if not hasattr(mod, '__file__'):
 				continue  # skip built-ins and system modules
-			# Optionally filter by project prefix:
-			#if not (mod.__name__.startswith('operators') or mod.__name__.startswith('schemas') or mod.__name__.startswith('wordwield')):
-			#	continue
 			try:
 				objs.update(vars(mod))
 			except Exception:
@@ -59,7 +56,7 @@ class Code:
 				continue
 			if not issubclass(obj, Operator):
 				continue
-			if name in ['Agent', 'Expert']:
+			if name in ['Agent']:
 				continue
 
 			try:

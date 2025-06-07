@@ -1,7 +1,7 @@
 from __future__ import annotations
 import random, json, aiofiles
 
-from typing   import Any, Dict, List, Optional
+from typing   import Any
 from pydantic import BaseModel
 
 from wordwield.lib import (
@@ -14,10 +14,8 @@ from wordwield.lib import (
 
 	O,
 	Operator,
-	Agent,
-	Expert
+	Agent
 )
-from wordwield.schemas import OperatorSchema
 
 
 @DapiService.wrap_exceptions()
@@ -31,7 +29,6 @@ class RuntimeService(DapiService):
 			'PROJECT'      : self.dapi.project,
 			'Operator'     : Operator,
 			'Agent'        : Agent,
-			'Expert'       : Expert,
  
 			'O'            : O,
 			'String'       : String,
