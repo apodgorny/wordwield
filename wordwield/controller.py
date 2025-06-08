@@ -25,8 +25,7 @@ dapi = Dapi(
 
 @dapi.router.post('/init', response_model=StatusSchema)
 async def init_project(input: ProjectConfigSchema):
-	await dapi.set_project(**input.to_dict())
-	print('[INIT] Project config received:', input.to_json())
+	await dapi.set_project(**input.model_dump())
 	return {'status': 'success'}
 
 @dapi.router.post('/create_type',                     response_model=TypeSchema)

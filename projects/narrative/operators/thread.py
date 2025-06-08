@@ -10,19 +10,19 @@ from schemas.schemas import (
 
 class ThreadWrite(Operator):
 	class InputType(O):
-		name : str
-		beat : BeatSchema
+		names : list[str]       # Names of threads (one or many)
+		beat  : BeatSchema
 
 	class OutputType(O):
 		status: int
 
-	async def invoke(self, name, beat):
-		thread = ThreadSchema.load(name)
-		if not thread:
-			thread = ThreadSchema(title=name, beats=[]).save(name)
-
-		thread.beats.append(beat)
-		thread.save(name)
+	async def invoke(self, names, beat):
+		for name in names:
+			thread = ThreadSchema.load(name)
+			if not thread:
+				thread = ThreadSchema(title=name, beats=[]).save(name)
+			thread.beats.append(beat)
+			thread.save(name)
 		return 0
 
 # ThreadRead

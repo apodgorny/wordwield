@@ -14,24 +14,23 @@ class Guesser(Agent):
 	Schema = GuesserSchema
 
 	template = '''
-		{dialog}
+		{history}
 		Based on previous guesses and responses guess a correct number.
 	'''
 
 	async def invoke(self, name, target_threads, source_threads):
-		source = await thread_read(names=target_threads, num_beats=0)
+		source = await thread_read(names=source_threads, num_beats=0)
 
+		history  = []
 		for beat in source:
-			
+			history.append(beat.to_prompt())
+		history = '\n'.join(history)
 
-		dialog = '\n'.join(dialog_lines) if dialog_lines else "No previous guesses."
-
-		# 3. Заполняем prompt и получаем следующую попытку через LLM
 		schema = GuesserSchema.load(name)
-		self.to_promptlets(schema)
-		prompt = self.fill(self.template, dialog=dialog)
+		self.to_promptlets(schema, history=history)
+		prompt = self.fill(self.template)
 
-		next_guess = await self.ask(prompt)
-		await thread_write(name=guess_thread, text=str(next_guess))
+		next_guess = await self.ask(prompt, persona='Guesser', voice='Guesser')
+		await thread_write(name=target_threads, text=str(next_guess))
 
 		return 0

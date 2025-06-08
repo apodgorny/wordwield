@@ -38,6 +38,15 @@ class O(BaseModel):
 	# Public class methods
 	############################################################################
 
+	@model_validator(mode="before")
+	@classmethod
+	def _before_validate(cls, data):
+		return cls.on_create(data)
+
+	@classmethod
+	def on_create(cls, data):
+		return data
+
 	@classmethod
 	def Field(cls, *args, description='', semantic=False, reverse=None, **kwargs):
 		extra = kwargs.setdefault('json_schema_extra', {})

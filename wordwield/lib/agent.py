@@ -32,12 +32,22 @@ class Agent(Operator):
 			result[name] = value
 		return result
 	
-	def to_promptlets(self, schema: O):
-		'''Add all fields of VoiceSchema as promptlets (for use in fill).'''
-		self._promptlets = {
-			** getattr(self, '_promptlets', {}),  # keep any existing promptlets
-			** schema.model_dump(),               # assumes VoiceSchema is a Pydantic model or similar
-		}
+	def to_promptlets(self, *args, **kwargs):
+		'''
+		Merge all dict-like positional arguments (schemas, dicts) and keyword arguments into self._promptlets.
+		For O instances (or any object with .to_dict()), use .to_dict().
+		'''
+		base = getattr(self, '_promptlets', {})
+		promptlets = dict(base)
+
+		for obj in args:
+			if hasattr(obj, 'to_dict'):
+				promptlets.update(obj.to_dict())
+			elif isinstance(obj, dict):
+				promptlets.update(obj)
+
+		promptlets.update(kwargs)
+		self._promptlets = promptlets
 
 	def fill(self, template: str, **vars) -> str:
 		template = String.unindent(template)
@@ -60,21 +70,22 @@ class Agent(Operator):
 
 		return template
 
-	async def ask(self, prompt = '', schema = None, output_repr=True):
-		hr     = '-' * 40
-		schema = schema or self.OutputType # type: ignore
-		if output_repr:
-			prompt = prompt + '\nPut all data into JSON:\n' + schema.split('llm')
+	async def ask(self, prompt='', schema=None, **extra_fields):
+		hr            = '-' * 40
+		schema        = schema or self.OutputType
+		llm_schema, _ = schema.split('llm')
+		prompt        = prompt + '\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
 
 		self.log('INPUT', prompt, hr)
 
-		output = await self.globals['ask'](
+		partial = await self.globals['ask'](
 			prompt         = prompt,
-			response_model = schema  # BaseModel
+			response_model = llm_schema
 		)
 
-		self.log('OUTPUT', output, hr)
-		return output
+		full = schema(**{**partial, **extra_fields})
+		self.log('OUTPUT', full, hr)
+		return full
 
 	async def invoke_decorator(self, *args, **kwargs):
 		self._promptlets = await self._get_promptlets()

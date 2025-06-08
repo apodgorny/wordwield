@@ -83,6 +83,11 @@ class Dapi:
 			'DB_PATH'        : db_path,
 			'DB_URL'         : db_url
 		}
+
+		print()
+		print(String.underlined('Project:'))
+		for k, v in self.project.items():
+			print(f'    {k:<17}{v}')
 		self.init_db()
 		await self.initialize_services()
 

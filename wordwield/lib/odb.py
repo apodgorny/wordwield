@@ -126,6 +126,31 @@ class ODB:
 			return obj
 		return None
 
+	# def _load_edges(self, seen=None):
+	# 	o    = self._o
+	# 	seen = seen or set()
+	# 	key  = (type(o), o.id)
+
+	# 	if key not in seen:
+	# 		seen.add(key)
+	# 		for name, field in o.model_fields.items():
+	# 			if not name in o.__dict__:
+	# 				value = self.get_related(name)
+	# 				if value is None:
+	# 					kind, _ = o.get_field_kind(name)
+	# 					if   kind == 'list' : value = []
+	# 					elif kind == 'dict' : value = {}
+	# 					else                : value = None
+
+	# 				setattr(o, name, value)
+	# 				val = getattr(o, name)
+	# 				if isinstance(val, list):
+	# 					for item in val:
+	# 						if hasattr(item, 'db'):
+	# 							item.db._load_edges(seen)
+	# 				elif hasattr(val, 'db'):
+	# 					val.db._load_edges(seen)
+
 	def _load_edges(self, seen=None):
 		o    = self._o
 		seen = seen or set()
@@ -134,22 +159,33 @@ class ODB:
 		if key not in seen:
 			seen.add(key)
 			for name, field in o.model_fields.items():
-				if not name in o.__dict__:
+				tp   = field.annotation
+				val  = getattr(o, name, None)
+				kind, _ = o.get_field_kind(name, tp)
+				
+				# Для list: если нет значения или пусто — грузим из edges
+				if kind == 'list' and (val is None or val == []):
 					value = self.get_related(name)
-					if value is None:
-						kind, _ = o.get_field_kind(name)
-						if   kind == 'list' : value = []
-						elif kind == 'dict' : value = {}
-						else                : value = None
+					setattr(o, name, value or [])
+					for item in getattr(o, name):
+						if hasattr(item, 'db'):
+							item.db._load_edges(seen)
 
+				# Для dict: если нет значения или пусто — грузим из edges
+				elif kind == 'dict' and (val is None or val == {}):
+					value = self.get_related(name)
+					setattr(o, name, value or {})
+					for item in getattr(o, name).values():
+						if hasattr(item, 'db'):
+							item.db._load_edges(seen)
+
+				# Для одиночных: если нет значения — грузим из edges
+				elif kind == 'single' and val is None:
+					value = self.get_related(name)
 					setattr(o, name, value)
-					val = getattr(o, name)
-					if isinstance(val, list):
-						for item in val:
-							if hasattr(item, 'db'):
-								item.db._load_edges(seen)
-					elif hasattr(val, 'db'):
-						val.db._load_edges(seen)
+					if hasattr(value, 'db'):
+						value.db._load_edges(seen)
+
 
 	def _save_edges(self):
 		o = self._o
@@ -160,7 +196,7 @@ class ODB:
 			kind, inner = o.get_field_kind(name, field.annotation)
 			reverse     = field.json_schema_extra.get('reverse') if field.json_schema_extra else None
 
-			if kind == 'single' and is_valid_edge_target(val):
+			if kind == 'single':
 				self._save_edge(src=o, tgt=val, rel1=name, rel2=reverse)
 
 			elif kind == 'list' and isinstance(val, list):
@@ -173,24 +209,21 @@ class ODB:
 
 	def _save_edge(self, src, tgt, rel1, rel2, key1='', key2=''):
 		if (
-			O.is_o_instance(tgt)
-			and tgt.id is not None
-			and self.session.get(tgt.db._orm_class, tgt.id) is not None
+			self._o.is_o_instance(tgt)
 			and not getattr(tgt.db, '_is_deleted', False)
 		):
 			tgt.save()
 			if src.id is not None:
-				kwargs = {
-					'id1'  : src.id, 'id2'  : tgt.id,
-					'rel1' : rel1,   'rel2' : rel2,
-					'key1' : key1,   'key2' : key2,
-				}
-				if not self.edges.update(** kwargs):
-					self.edges.create(
-						** kwargs,
-						type1 = src.__class__.__name__,
-						type2 = tgt.__class__.__name__,
-					)
+				self.edges.set(
+					id1   = src.id,
+					id2   = tgt.id,
+					type1 = src.__class__.__name__,
+					type2 = tgt.__class__.__name__,
+					rel1  = rel1,
+					rel2  = rel2,
+					key1  = key1,
+					key2  = key2,
+				)
 
 	def _set_name(self, name: str):
 		if not self._o.id:
@@ -224,7 +257,7 @@ class ODB:
 	
 	def query(self)         : return self.session.query(self._orm_class)
 	def table_exists(self)  : return inspect(self.session.bind).has_table(self.table_name)
-	def create_table(self)  : self._orm_class.metadata.create_all(self.session.bind)
+	def create_table(self)  : self._orm_class.__table__.create(bind=self.session.bind, checkfirst=True)
 	def drop_table(self)    : self._orm_class.metadata.drop_all(self.session.bind)
 	def filter(self, *args) : return self.query().filter(*args)
 	def get(self, id)       : return self._o_or_none(self.session.get(self._orm_class, id))
@@ -247,7 +280,6 @@ class ODB:
 		self.create_table()
 
 		if obj_id:
-			# No need to check for existence – we assume id is valid
 			record = self.session.get(self._orm_class, obj_id)
 			if not record:
 				raise ValueError(f'Record with id={obj_id} not found in table `{self._orm_class.__tablename__}`')
@@ -257,12 +289,15 @@ class ODB:
 			record = self._orm_class(**data)
 			self.session.add(record)
 
-		self._save_edges()
 		self.commit()
 		setattr(self._o, '__id__', getattr(record, 'id', None))
+		self._save_edges()
+		self.commit()
 		self._load_edges()
 
-		if name is not None:
+		if not self.get_name():
+			if name is None and hasattr(record, 'name'):
+				name = getattr(record, 'name')
 			self._set_name(name)
 			self.commit()
 
@@ -302,11 +337,18 @@ class ODB:
 		tp = field.annotation
 
 		if get_origin(tp) in (list, List) : return result
+		if get_origin(tp) in (dict, Dict) : return {k: v for k, v in result if k is not None} ##??
 		elif result                       : return result[0]
 		else                              : return None
 
 	def get_name(self) -> str:
 		for edge in self.edges.get(self._o, rel='ref'):
-			if edge.id1 == 0 and edge.type1 == 'global':
+			if (
+				edge.id1 == 0
+				and edge.type1 == 'global'
+				and edge.id2 == self._o.id
+				and edge.type2 == self._o.__class__.__name__
+			):
 				return edge.key1
 		return None
+
