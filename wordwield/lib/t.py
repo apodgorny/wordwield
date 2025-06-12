@@ -27,8 +27,7 @@ T.TREE(dict)
 @T.register(T.PYDANTIC, T.STRING)
 def model_to_string(obj, base_level=0):
 	tab_size = 3
-	name     = obj.db.get_name()
-	label    = f'{name}:' if name else ''
+	label    = f'{obj.name}:' if hasattr(obj, 'name') else ''
 	id_str   = f'({label}{obj.id})' if obj.id else ''
 	data     = obj.to_dict(r=False, e=True)
 
@@ -250,7 +249,11 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 				else:
 					sql_type = String
 
-				fields[name] = Column(sql_type, nullable=not field.is_required())
+				column_kwargs = {'nullable': not field.is_required()}
+				if name == 'name':
+					column_kwargs['unique'] = True
+
+				fields[name] = Column(sql_type, **column_kwargs)
 
 		name  = model.__name__ + 'Orm'
 		table = type(name, (Record,), {

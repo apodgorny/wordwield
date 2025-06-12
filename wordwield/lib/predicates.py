@@ -10,7 +10,6 @@ def unwrap_optional(tp):
 			return unwrap_optional(args[0])
 	return tp
 
-
 def is_atomic_type(tp):
 	# Atomic — int, str, float, bool
 	tp = unwrap_optional(tp)
@@ -52,3 +51,11 @@ def is_excluded_type(tp):
 	if origin in (dict, Dict) : return len(args) == 2 and args[0] is str and is_pydantic_class(args[1])
 
 	return False
+
+def is_list(tp):
+	tp = unwrap_optional(tp)
+	return get_origin(tp) in (list, List)
+
+def is_dict(tp):
+	tp = unwrap_optional(tp)
+	return get_origin(tp) in (dict, Dict)

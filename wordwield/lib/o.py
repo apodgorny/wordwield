@@ -12,12 +12,12 @@ class O(BaseModel):
 	# Magic
 	############################################################################
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, **kwargs):
 		for k in ['id', 'global_name']:
 			if k in kwargs:
 				raise KeyError(f'Attribute `{k}` is reserved. Use `{self.__class__.__name__}.load({k})` instead')
 
-		super().__init__(*args, **kwargs)
+		super().__init__(**kwargs)
 		self.__db__ = ODB(self)
 
 	def __getattr__(self, name: str):
@@ -48,14 +48,6 @@ class O(BaseModel):
 	def on_create(cls, data):
 		return data
 
-	# @classmethod
-	# def Field(cls, *args, description='', semantic=False, reverse=None, **kwargs):
-	# 	extra = kwargs.setdefault('json_schema_extra', {})
-	# 	if description : extra['description'] = description
-	# 	if semantic    : extra['semantic']    = True
-	# 	if reverse     : extra['reverse']     = reverse
-	# 	return Field(*args, description=description, **kwargs)
-	
 	@classmethod
 	def Field(cls, *args, description='', **kwargs):
 		extra = kwargs.pop('json_schema_extra', {}) or {}
@@ -122,7 +114,6 @@ class O(BaseModel):
 		false_fields = {}
 		for name, field in cls.model_fields.items():
 			info         = field.json_schema_extra or {}
-			print(info)
 			flag         = info.get(by, True)
 			target       = false_fields if flag is False else true_fields
 			desc         = info.get('description', None)
@@ -131,12 +122,6 @@ class O(BaseModel):
 			default      = field.default if field.default is not None else ...
 			target[name] = (field.annotation, default, field_kwargs)
 
-		# def make_schema(suffix, fields):
-		# 	attrs = {}
-		# 	for k, (ann, default, field_kwargs) in fields.items():
-		# 		attrs[k] = Field(default, **field_kwargs)
-		# 	return type(f'{cls.__name__}__{suffix}', (O,), attrs)
-		
 		def make_schema(suffix, fields):
 			annotations = {}
 			namespace = {}
@@ -147,7 +132,6 @@ class O(BaseModel):
 
 			namespace['__annotations__'] = annotations
 			return type(f'{cls.__name__}__{suffix}', (O,), namespace)
-
 
 		TrueSchema  = make_schema('True',  true_fields)
 		FalseSchema = make_schema('False', false_fields)
@@ -171,12 +155,11 @@ class O(BaseModel):
 	def to_json(self, r=False)          -> str  : return json.dumps(self.to_dict(r, e=True), indent=4, ensure_ascii=False)
 	def to_dict(self, r=False, e=False) -> dict : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
 	def to_tree(self)                   -> str  : return T(T.PYDANTIC, T.TREE, self)
-	def get_name(self)                  -> str  : return self.db.get_name()
 
 	def to_semantic_hint(self) -> str:
-		data = T(T.PYDANTIC, T.DATA, self)
+		data   = T(T.PYDANTIC, T.DATA, self)
 		fields = self.model_fields
-		lines = []
+		lines  = []
 
 		for name, value in data.items():
 			info = fields[name].json_schema_extra or {}
@@ -190,9 +173,9 @@ class O(BaseModel):
 		data.pop('id', None)
 		return self.__class__(**data)
 
-	def save(self, name=None):
-		print("O.save: self =", self, "type =", type(self))
-		self.db.save(name)
+	def save(self):
+		print('SAVING', self)
+		self.db.save()
 		return self
 
 	def delete(self):
@@ -201,6 +184,27 @@ class O(BaseModel):
 	def get_description(self, field: str) -> str:
 		info = self.model_fields.get(field)
 		return info.description or ''
+	
+	def iter_nested(self):
+		'''
+			Yields (key, val) for all nested O-objects in single/list/dict fields (first level only).
+			key:
+				- None for 'single'
+				- index (int) for 'list'
+				- dict key for 'dict'
+		'''
+		for name, field in self.model_fields.items():
+			kind, _ = self.get_field_kind(name, field.annotation)
+			val = getattr(self, name, None)
+			if kind == 'single' and val is not None:
+				yield ('', val)
+			elif kind == 'list' and val:
+				for idx, item in enumerate(val):
+					yield (str(idx), item)
+			elif kind == 'dict' and val:
+				for k, item in val.items():
+					yield (k, item)
+
 
 ##################################################################################
 

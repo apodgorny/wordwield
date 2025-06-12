@@ -21,13 +21,14 @@ class StreamWrite(Operator):
 			names = [names]
 
 		for name in names:
+			print(name)
 			stream = StreamSchema.load(name)
-			if not stream:
+			if stream is None:
 				print('namess', name)
-				stream = StreamSchema(name=name, beats=[]).save(name)
+				stream = StreamSchema(name=name, beats=[])
 			stream.beats.append(beat)
 			print('Saving stream', name, flush=True)
-			stream.save(name)
+			stream.save()
 			if stream.triggers:
 				agent = AgentSchema.load(stream.triggers)
 				await self.call(agent.type, name=agent.name)

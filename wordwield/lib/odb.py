@@ -2,14 +2,13 @@ from sqlalchemy          import inspect
 from sqlalchemy.orm      import Session
 
 from typing                    import get_origin, List, Dict
+from wordwield.lib.predicates  import is_list, is_dict
 from wordwield.lib.t           import T
 from wordwield.lib.edge        import Edge
 from wordwield.db              import EdgeRecord
 
 
-
 class ODB:
-
 	session = None
 	types   = {}
 	objects = {}
@@ -19,55 +18,50 @@ class ODB:
 
 	@classmethod
 	def load(cls, id_or_name: int | str, o_class: 'O') -> 'O':
-		if isinstance(id_or_name, int):
-			return cls.load_by_id(id_or_name, o_class)
-		if isinstance(id_or_name, str):
-			return cls.load_by_name(id_or_name, o_class)
-		return None
-
-	@classmethod
-	def load_by_id(cls, id: int, o_class: 'O') -> 'O':
 		if isinstance(o_class, str):
 			o_class = cls.types[o_class]
 
-		key  = (o_class, id)
+		key = (o_class, id_or_name)
 		if key in cls.objects:
 			return cls.objects[key]
+
+		o         = None
+		orm_obj   = None
+		orm_class = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
+
+		if id_or_name == 'source':
+			i = 1
 		
-		o         = cls._preload(id, o_class)
-		o.__db__  = ODB(o)
-		o.__id__  = id
+		if isinstance(id_or_name, int):
+			orm_obj = cls._load_by_id(id_or_name, orm_class)
+		if isinstance(id_or_name, str):
+			orm_obj = cls._load_by_name(id_or_name, orm_class)
+	
+		if orm_obj is not None:
+			data = T(T.SQLALCHEMY_MODEL, T.DATA, orm_obj)
+			id = data.pop('id')
+			o = o_class.model_construct(**data)
+		
+			o.__db__  = ODB(o)
+			o.__id__  = id
 
-		cls.objects[key] = o
-
-		o.db._load_edges()
+			cls.objects[key] = o
+			o.db._load_edges()
 		return o
 
 	@classmethod
-	def load_by_name(cls, name: str, o_class: 'O') -> 'O':
-		record = cls.session.query(EdgeRecord).filter_by(
-			type1 = 'global',
-			id1   = 0,
-			rel1  = 'ref',
-			key1  = name,
-		).first()
-
-		if record:
-			return cls.load(record.id2, o_class)
-		return None
+	def _load_by_name(cls, name: str, orm_class: 'O') -> 'O':
+		orm_class.__tablename__
+		orm_obj = None
+		if inspect(cls.session.bind).has_table(orm_class.__tablename__):
+			orm_obj = cls.session.query(orm_class).filter_by(
+				name = name,
+			).first()
+		return orm_obj
 
 	@classmethod
-	def _preload(cls, id, o_class):
-		'''Loads simple data items and stubs for O, list[O] and dict[str, O]'''
-		orm_class = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
-		orm_obj   = cls.session.get(orm_class, id)
-
-		if not orm_obj:
-			raise ValueError(f'{o_class.__name__} with id={id} not found')
-
-		data = T(T.SQLALCHEMY_MODEL, T.DATA, orm_obj)
-		data.pop('id')
-		return o_class.model_construct(**data)
+	def _load_by_id(cls, id, orm_class):
+		return cls.session.get(orm_class, id)
 
 	def _reload(self):
 		o     = self._o
@@ -83,29 +77,14 @@ class ODB:
 		o.__db__ = self
 
 	def _reload_related(self):
-		o = self._o
-
 		for other in list(ODB.objects.values()):
-			if not isinstance(other, O): continue
+			if not self._o.is_o_type(other):
+				continue
 
-			for name, field in other.model_fields.items():
-				kind, _ = other.get_field_kind(name, field.annotation)
-				value   = getattr(other, name, None)
-
-				if kind == 'single':
-					if value is o:
-						other.db._reload()
-						break
-
-				elif kind == 'list' and isinstance(value, list):
-					if any(item is o for item in value):
-						other.db._reload()
-						break
-
-				elif kind == 'dict' and isinstance(value, dict):
-					if any(item is o for item in value.values()):
-						other.db._reload()
-						break
+			for _, child in other.iter_nested():
+				if child is self._o:
+					other.db._reload()
+					break
 
 	# Magic methods
 	################################################################################################
@@ -130,56 +109,30 @@ class ODB:
 		o    = self._o
 		seen = seen or set()
 		key  = (type(o), o.id)
+		if key in seen:
+			return
+		seen.add(key)
 
-		if key not in seen:
-			seen.add(key)
-			for name, field in o.model_fields.items():
-				tp   = field.annotation
-				val  = getattr(o, name, None)
-				kind, _ = o.get_field_kind(name, tp)
-				
-				# Для list: если нет значения или пусто — грузим из edges
-				if kind == 'list' and (val is None or val == []):
-					value = self.get_related(name)
-					setattr(o, name, value or [])
-					for item in getattr(o, name):
-						if hasattr(item, 'db'):
-							item.db._load_edges(seen)
+		# Заполняем все пустые single/list/dict-поля из edges
+		for name, field in o.model_fields.items():
+			val  = getattr(o, name, None)
+			kind, _ = o.get_field_kind(name, field.annotation)
+			if not val:
+				setattr(o, name, self.get_related(name))
 
-				# Для dict: если нет значения или пусто — грузим из edges
-				elif kind == 'dict' and (val is None or val == {}):
-					value = self.get_related(name)
-					setattr(o, name, value or {})
-					for item in getattr(o, name).values():
-						if hasattr(item, 'db'):
-							item.db._load_edges(seen)
-
-				# Для одиночных: если нет значения — грузим из edges
-				elif kind == 'single' and val is None:
-					value = self.get_related(name)
-					setattr(o, name, value)
-					if hasattr(value, 'db'):
-						value.db._load_edges(seen)
+		# Рекурсивно вызываем _load_edges для всех вложенных объектов
+		for _, child in o.iter_nested():
+			if hasattr(child, 'db'):
+				child.db._load_edges(seen)
 
 	def _save_edges(self):
 		o = self._o
 		s = self.session
 
 		for name, field in o.model_fields.items():
-			val         = getattr(o, name, None)
-			kind, inner = o.get_field_kind(name, field.annotation)
-			reverse     = field.json_schema_extra.get('reverse') if field.json_schema_extra else None
-
-			if kind == 'single':
-				self._save_edge(src=o, tgt=val, rel1=name, rel2=reverse)
-
-			elif kind == 'list' and isinstance(val, list):
-				for i, item in enumerate(val):
-					self._save_edge(src=o, tgt=item, rel1=name, rel2=reverse, key1=str(i))
-
-			elif kind == 'dict' and isinstance(val, dict):
-				for k, item in val.items():
-					self._save_edge(src=o, tgt=item, rel1=name, rel2=reverse, key1=str(k))
+			reverse = field.json_schema_extra.get('reverse') if field.json_schema_extra else None
+			for key, child in o.iter_nested():
+				self._save_edge(src=o, tgt=child, rel1=name, rel2=reverse, key1=key)
 
 	def _save_edge(self, src, tgt, rel1, rel2, key1='', key2=''):
 		if (
@@ -198,27 +151,6 @@ class ODB:
 					key1  = key1,
 					key2  = key2,
 				)
-
-	def _set_name(self, name: str):
-		if not self._o.id:
-			raise ValueError(f'❌ Id is not set in `{name}`')
-			
-		if name is None or self.get_name() == name:
-			return
-
-		if ODB.load_by_name(name, self._o.__class__):
-			raise ValueError(f'❌ Name `{name}` already exists')
-
-		self.edges.set(
-			id1   = 0,
-			id2   = self._o.id,
-			type1 = 'global',
-			type2 = self._o.__class__.__name__,
-			rel1  = 'ref',
-			rel2  = 'ref',
-			key1  = name
-		)
-
 
 	# Public
 	################################################################################################
@@ -247,11 +179,14 @@ class ODB:
 	def flush(self)         : self.session.flush()
 	def close(self)         : self.session.close()
 
-	def save(self, name=None):
+	def save(self):
 		data   = self._o.to_dict()
 		obj_id = getattr(self._o, '__id__', None)
 
 		self.create_table()
+
+		for _, child in self._o.iter_nested():
+			child.save()
 
 		if obj_id:
 			record = self.session.get(self._orm_class, obj_id)
@@ -268,13 +203,6 @@ class ODB:
 		self._save_edges()
 		self.commit()
 		self._load_edges()
-
-		if not self.get_name():
-			if name is None and hasattr(record, 'name'):
-				name = getattr(record, 'name')
-			self._set_name(name)
-			self.commit()
-
 		return self
 
 	def delete(self):
@@ -300,29 +228,19 @@ class ODB:
 		for edge in edges:
 			if edge.rel1 == name and edge.id1 == o.id:
 				result.append(ODB.load(edge.id2, edge.type2))
-
 			elif edge.rel2 == name and edge.id2 == o.id:
 				result.append(ODB.load(edge.id1, edge.type1))
 
-		# Detect result type by field shape
 		field = o.model_fields.get(name)
 		if field is None:
 			raise AttributeError(f'Field `{name}` not found in {o.__class__.__name__}')
 		tp = field.annotation
 
-		if get_origin(tp) in (list, List) : return result
-		if get_origin(tp) in (dict, Dict) : return {k: v for k, v in result if k is not None} ##??
-		elif result                       : return result[0]
-		else                              : return None
-
-	def get_name(self) -> str:
-		for edge in self.edges.get(self._o, rel='ref'):
-			if (
-				edge.id1 == 0
-				and edge.type1 == 'global'
-				and edge.id2 == self._o.id
-				and edge.type2 == self._o.__class__.__name__
-			):
-				return edge.key1
-		return None
-
+		if is_list(tp):
+			return result or []
+		if is_dict(tp):
+			return {} if not result else {k: v for k, v in result}
+		elif result:
+			return result[0]
+		else:
+			return None

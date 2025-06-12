@@ -77,9 +77,9 @@ class Agent(Operator):
 		prompt                     = prompt + '\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
 
 		# self.log('INPUT', prompt, hr)
-		print('NON-LLM', json.dumps(non_llm_schema.to_schema(), indent=4))
-		print('LLM', json.dumps(llm_schema.to_schema(), indent=4))
-		print('&' * 50)
+		# print('NON-LLM', json.dumps(non_llm_schema.to_schema(), indent=4))
+		# print('LLM', json.dumps(llm_schema.to_schema(), indent=4))
+		# print('&' * 50)
 
 		partial = await self.globals['ask'](
 			prompt         = prompt,

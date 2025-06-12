@@ -26,55 +26,38 @@ class Edge:
 		)
 		self.session.add(record)
 
-	def _update(self, id1, id2, rel1, rel2, key1='', key2='') -> bool:
+	def _update(self, id1, id2, type1, type2, rel1, rel2, key1='', key2='') -> bool:
 		q = self.session.query(self.model)
-
 		candidates = q.filter(
-			self._get_filter(id1, id2, rel1, rel2)
+			self._get_filter(id1, id2, type1, type2, rel1, rel2, key1, key2)
 		).all()
-
-		for edge in candidates:
-			updated = False
-
-			if not edge.key1:
-				if edge.id1 == id1 and key1:
-					edge.key1 = key1
-					updated   = True
-				elif edge.id1 == id2 and key2:
-					edge.key1 = key2
-					updated   = True
-
-			if not edge.key2:
-				if edge.id2 == id2 and key2:
-					edge.key2 = key2
-					updated   = True
-				elif edge.id2 == id1 and key1:
-					edge.key2 = key1
-					updated   = True
-
-			if updated:
-				self.session.add(edge)
-				return True
-
+		if candidates:
+			# Тут можно обновить другие поля, если надо (например, время обновления)
+			return True
 		return False
 
-	def _get_filter(self, id1, id2, rel1, rel2):
-		return or_(
-			and_(
-				self.model.id1  == id1,  self.model.id2  == id2,
-				self.model.rel1 == rel1, self.model.rel2 == rel2
-			),
-			and_(
-				self.model.id1  == id2,  self.model.id2  == id1,
-				self.model.rel1 == rel2, self.model.rel2 == rel1
-			)
+	def _get_filter(self, id1, id2, type1, type2, rel1, rel2, key1, key2):
+		return and_(
+			self.model.id1   == id1,
+			self.model.id2   == id2,
+			self.model.type1 == type1,
+			self.model.type2 == type2,
+			self.model.rel1  == rel1,
+			self.model.rel2  == rel2,
+			self.model.key1  == key1,
+			self.model.key2  == key2,
 		)
 
 	# Public methods
 	############################################################################
 
 	def set(self, id1, id2, type1, type2, rel1, rel2, key1='', key2=''):
-		if not self._update(id1, id2, rel1, rel2, key1, key2):
+
+		key1 = str(key1) if key1 is not None else ''
+		key2 = str(key2) if key2 is not None else ''
+
+		updated = self._update(id1, id2, type1, type2, rel1, rel2, key1, key2)
+		if not updated:
 			self._create(id1, id2, type1, type2, rel1, rel2, key1, key2)
 
 	def unset(self, id1, id2, rel1, rel2):

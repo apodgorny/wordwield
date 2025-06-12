@@ -37,7 +37,7 @@ class OperatorRecord(Record):
 class EdgeRecord(Record):
 	__tablename__ = 'edges'
 	__table_args__ = (
-		UniqueConstraint('id1', 'id2', 'key1', 'key2', 'rel1', 'rel2'),
+		UniqueConstraint('id1', 'id2', 'key1', 'key2', 'rel1', 'rel2', 'type1', 'type2'),
 	)
 
 	id      = Column(Integer, primary_key=True)	          # Unique identifier of this edge row

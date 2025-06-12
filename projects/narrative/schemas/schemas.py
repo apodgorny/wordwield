@@ -54,6 +54,7 @@ class AgentSelectorSchema(AgentSchema):
 	write_false : Optional[list[VariableSchema]]         = O.Field(description='Threads names for persona to write to',  default_factory=list)
 	 
 class TimelineSchema(O):
+	name     : str
 	agents   : list[AgentSchema]  = O.Field(semantic=True, description='All active personas in the timeline')
 	streams  : list[StreamSchema] = O.Field(semantic=True, description='All active threads in the timeline')
 

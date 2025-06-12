@@ -70,7 +70,7 @@ class ModelOllama(Model):
 		print('PROMPT', prompt)
 		print('-' * 30)
 		response = await asyncio.to_thread(self.client.chat, **params)
-		print('✅ ollama.chat returned!')
+		print('✅ ollama.chat returned:')
 		text      = response['message']['content']
 		print('-' * 30)
 		print('OUTPUT', text)
