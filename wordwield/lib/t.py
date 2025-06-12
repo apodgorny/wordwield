@@ -3,11 +3,12 @@ from typing import Any, get_args, get_origin, Union, List, Dict
 
 from pydantic        import BaseModel, create_model
 from pydantic.fields import FieldInfo
-from sqlalchemy      import Table, Column, MetaData, Integer, String
+from sqlalchemy      import Table, Column, MetaData, Integer, String, JSON
 from sqlalchemy.orm  import declarative_base
 
-from .transform import T
-from .record    import Record
+from .predicates  import is_atomic_dict, is_atomic_list, is_pydantic, is_pydantic_class, is_excluded_type
+from .transform   import T
+from .record      import Record
 
 
 T.PYDANTIC(BaseModel)
@@ -22,72 +23,68 @@ T.TYPE(str)
 T.STRING(str)
 T.TREE(dict)
 
-class PYDANTIC:
-	@staticmethod
-	def is_pydantic(value):
-			return isinstance(value, BaseModel)
-
-	@staticmethod
-	def is_pydantic_class(tp):
-		return isinstance(tp, type) and issubclass(tp, BaseModel)
-
-	@staticmethod
-	def is_excluded_type(tp):
-		# unwrap Optional[...] → T
-		if get_origin(tp) is Union:
-			args = [a for a in get_args(tp) if a is not type(None)]
-			if len(args) == 1:
-				tp = args[0]
-
-		origin = get_origin(tp)
-		args   = get_args(tp)
-
-		if PYDANTIC.is_pydantic_class(tp) : return True
-		if origin in (list, List)         : return len(args) == 1                    and PYDANTIC.is_pydantic_class(args[0])
-		if origin in (dict, Dict)         : return len(args) == 2 and args[0] is str and PYDANTIC.is_pydantic_class(args[1])
-
-		return False
 
 @T.register(T.PYDANTIC, T.STRING)
-def model_to_string(obj):
-	name   = obj.db.get_name()
-	label  = f'{name}:' if name else ''
-	id_str = f'({label}{obj.id})' if obj.id else ''
-	data   = obj.to_dict(r=False, e=True)
+def model_to_string(obj, base_level=0):
+	tab_size = 3
+	name     = obj.db.get_name()
+	label    = f'{name}:' if name else ''
+	id_str   = f'({label}{obj.id})' if obj.id else ''
+	data     = obj.to_dict(r=False, e=True)
 
-	def indent(text, level):
-		pad = ' ' * (level * 4)
-		return '\n'.join(pad + line if line else '' for line in text.splitlines())
-
-	def fmt_value(value, level=1):
+	def fmt_value(value, level):
 		if isinstance(value, BaseModel):
-			return indent(str(value), level)
+			# For nested BaseModel, don't add extra indentation - it handles its own
+			nested = model_to_string(value, 0)
+			# Indent the entire nested string to the current level
+			lines = nested.splitlines()
+			indented_lines = []
+			for line in lines:
+				if line.strip():  # Only indent non-empty lines
+					indented_lines.append(' ' * (level * tab_size) + line)
+				else:
+					indented_lines.append('')
+			return '\n'.join(indented_lines)
 		if isinstance(value, list):
-			if value:
-				items = ',\n'.join(fmt_value(v, level + 1) for v in value)
-				return '[\n' + items + '\n' + ' ' * (level * 4) + ']'
-			return '[]'
+			if not value:
+				return '[]'
+			items = []
+			for v in value:
+				formatted = fmt_value(v, level + 1)
+				# Don't add extra indentation for BaseModel items since they handle their own
+				if isinstance(v, BaseModel):
+					items.append(formatted)
+				else:
+					items.append(' ' * ((level + 1) * tab_size) + formatted)
+			return '[\n' + ',\n'.join(items) + '\n' + ' ' * (level * tab_size) + ']'
 		if isinstance(value, dict):
-			if value:
-				items = ',\n'.join(
-					' ' * ((level + 1) * 4) + f'"{k}": {fmt_value(v, level + 1)}'
-					for k, v in value.items()
-				)
-				return '{\n' + items + '\n' + ' ' * (level * 4) + '}'
-			return '{}'
+			if not value:
+				return '{}'
+			items = []
+			for k, v in value.items():
+				formatted = fmt_value(v, level + 1)
+				items.append(' ' * ((level + 1) * tab_size) + f'"{k}": {formatted}')
+			return '{\n' + ',\n'.join(items) + '\n' + ' ' * (level * tab_size) + '}'
 		return json.dumps(value, ensure_ascii=False)
 
-	lines = [f'{obj.__class__.__name__}{id_str} {{']
-
+	# Build the object representation
+	base_indent = ' ' * (base_level * tab_size)
+	field_indent = ' ' * ((base_level + 1) * tab_size)
+	
+	lines = [base_indent + f'{obj.__class__.__name__}{id_str} {{']
+	
 	items = list(data.items())
-	for i, (name, value) in enumerate(items):
+	for i, (k, v) in enumerate(items):
 		is_last = i == len(items) - 1
 		comma   = '' if is_last else ','
-		lines.append(f'    "{name}": {fmt_value(value, 1)}{comma}')
-		
-	lines.append('}')
-	return re.sub(':[ ]+', ': ', '\n'.join(lines))
-
+		formatted = fmt_value(v, base_level + 1)
+		lines.append(field_indent + f'"{k}": {formatted}{comma}')
+	
+	lines.append(base_indent + '}')
+	result = '\n'.join(lines)
+	
+	# Clean up extra spaces after colons
+	return re.sub(':[ ]+', ': ', result)
 
 @T.register(T.PYDANTIC, T.JSONSCHEMA)
 def model_to_schema(model: type[BaseModel]) -> dict:
@@ -97,7 +94,7 @@ def model_to_schema(model: type[BaseModel]) -> dict:
 @T.register(T.PYDANTIC, T.DATA)
 def model_to_data(obj, recursive=False, show_empty=False):
 	def convert(value, seen):
-		if PYDANTIC.is_pydantic(value):
+		if is_pydantic(value):
 			if recursive:
 				if id(value) in seen:
 					return None
@@ -113,24 +110,24 @@ def model_to_data(obj, recursive=False, show_empty=False):
 			return {
 				k: convert(v, seen)
 				for k, v in value.items()
-				if recursive or not PYDANTIC.is_pydantic(v)
+				if recursive or not is_pydantic(v)
 			}
 
 		if isinstance(value, (list, tuple, set)):
 			return [
 				convert(v, seen)
 				for v in value
-				if recursive or not PYDANTIC.is_pydantic(v)
+				if recursive or not is_pydantic(v)
 			]
 
 		return value
 
-	if PYDANTIC.is_pydantic(obj):
+	if is_pydantic(obj):
 		if not recursive:
 			return {
 				k: getattr(obj, k)
 				for k, f in obj.model_fields.items()
-				if show_empty or not PYDANTIC.is_excluded_type(f.annotation)
+				if show_empty or not is_excluded_type(f.annotation)
 			}
 		return convert(obj, seen=set())
 
@@ -184,6 +181,49 @@ def data_to_arguments(data):
 ######################################## SQLALCHEMY ########################################
 
 
+# @T.register(T.PYDANTIC, T.SQLALCHEMY_MODEL)
+# def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
+# 	fields = {}
+
+# 	if issubclass(model, BaseModel):
+# 		fields['id'] = Column(Integer, primary_key=True, autoincrement=True)
+
+# 		for name, field in model.model_fields.items():
+# 			is_id_field = name == 'id'                   # Skip 'id' — already handled
+# 			ftype       = field.annotation               # Raw field type
+# 			excluded    = is_excluded_type(ftype)        # Nested Pydantic models are stored via edges
+
+# 			if not is_id_field and not excluded:
+# 				for name, field in model.model_fields.items():
+# 					ftype = field.annotation
+# 					if is_atomic_list(ftype) or is_atomic_dict(ftype):
+# 						sql_type = JSON
+# 					elif ftype is int:
+# 						sql_type = Integer
+# 					elif ftype is str:
+# 						sql_type = String
+# 					elif ftype is dict:
+# 						sql_type = JSON
+# 					else:
+# 						sql_type = String
+# 					fields[name] = Column(sql_type, nullable=not field.is_required())
+
+# 		name  = model.__name__ + 'Orm'
+# 		table = type(name, (Record,), {
+# 			'__tablename__'  : model.__name__.lower(),
+# 			'__table_args__' : {
+# 				'extend_existing'      : True,
+# 				'sqlite_autoincrement' : True
+# 			},
+# 			**fields
+# 		})
+
+# 	else:
+# 		table = model  # Already a table — passthrough
+
+# 	return table
+
+
 @T.register(T.PYDANTIC, T.SQLALCHEMY_MODEL)
 def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 	fields = {}
@@ -192,20 +232,25 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 		fields['id'] = Column(Integer, primary_key=True, autoincrement=True)
 
 		for name, field in model.model_fields.items():
-			is_id_field = name == 'id'                            # Skip 'id' — already handled
-			ftype       = field.annotation                        # Raw field type
-			excluded    = PYDANTIC.is_excluded_type(ftype)        # Nested Pydantic models are stored via edges
+			if name == 'id':
+				continue
 
-			if not is_id_field and not excluded:
-				sql_type = (                                       # Map basic types to SQLAlchemy columns
-					Integer if ftype is int  else
-					String  if ftype is str  else
-					JSON    if ftype is dict else
-					String
-				)
+			ftype    = field.annotation
+			excluded = is_excluded_type(ftype)
 
-				nullable     = not field.is_required()            # Optional fields become nullable
-				fields[name] = Column(sql_type, nullable=nullable)
+			if not excluded:
+				if is_atomic_list(ftype) or is_atomic_dict(ftype):
+					sql_type = JSON
+				elif ftype is int:
+					sql_type = Integer
+				elif ftype is str:
+					sql_type = String
+				elif ftype is dict:
+					sql_type = JSON
+				else:
+					sql_type = String
+
+				fields[name] = Column(sql_type, nullable=not field.is_required())
 
 		name  = model.__name__ + 'Orm'
 		table = type(name, (Record,), {
@@ -216,6 +261,9 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 			},
 			**fields
 		})
+
+		print(f"Created SQLAlchemy model: {table} ({name})")
+		print("Fields:", fields)
 
 	else:
 		table = model  # Already a table — passthrough

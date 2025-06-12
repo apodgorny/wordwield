@@ -57,8 +57,11 @@ class Operator:
 		with open(filepath, mode, encoding='utf-8') as f:
 			f.write(log_line)
 
-	async def call(self, name, **kwargs):
-		return await self.globals['call'](name, *[], **kwargs)
+	async def call(self, operator_name, **kwargs):
+		return await self.globals['call'](operator_name, *[], **kwargs)
+	
+	async def schema(self, schema_name):
+		return await self.globals['schema'](schema_name)
 	
 	async def invoke_decorator(self, *args, **kwargs):
 		return await self.invoke(*args, **kwargs)

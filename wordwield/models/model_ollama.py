@@ -5,7 +5,7 @@ import asyncio
 import ollama
 from pydantic import BaseModel
 
-from lib import Model
+from wordwield.lib import Model
 
 
 class ModelOllama(Model):
@@ -38,7 +38,6 @@ class ModelOllama(Model):
 			print('⚡ UnicodeError caught, returning original output')
 			return output
 
-
 	async def __call__(
 		self,
 		prompt          : str,
@@ -67,6 +66,9 @@ class ModelOllama(Model):
 			params['messages'].insert(0, {'role': 'system', 'content': system})
 
 		print('⏳ Calling ollama.chat...')
+		print('-' * 30)
+		print('PROMPT', prompt)
+		print('-' * 30)
 		response = await asyncio.to_thread(self.client.chat, **params)
 		print('✅ ollama.chat returned!')
 		text      = response['message']['content']

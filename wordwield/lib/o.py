@@ -1,7 +1,7 @@
-import os, json
+import os, json, types
 from typing   import Any, get_args, get_origin, Union, List, Dict
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field as PydanticField, model_validator
 
 from .t   import T
 from .odb import ODB
@@ -41,19 +41,35 @@ class O(BaseModel):
 	@model_validator(mode="before")
 	@classmethod
 	def _before_validate(cls, data):
+		ValidationError.last_model = cls.__name__
 		return cls.on_create(data)
 
 	@classmethod
 	def on_create(cls, data):
 		return data
 
+	# @classmethod
+	# def Field(cls, *args, description='', semantic=False, reverse=None, **kwargs):
+	# 	extra = kwargs.setdefault('json_schema_extra', {})
+	# 	if description : extra['description'] = description
+	# 	if semantic    : extra['semantic']    = True
+	# 	if reverse     : extra['reverse']     = reverse
+	# 	return Field(*args, description=description, **kwargs)
+	
 	@classmethod
-	def Field(cls, *args, description='', semantic=False, reverse=None, **kwargs):
-		extra = kwargs.setdefault('json_schema_extra', {})
-		if description : extra['description'] = description
-		if semantic    : extra['semantic']    = True
-		if reverse     : extra['reverse']     = reverse
-		return Field(*args, description=description, **kwargs)
+	def Field(cls, *args, description='', **kwargs):
+		extra = kwargs.pop('json_schema_extra', {}) or {}
+		if description:
+			extra['description']  = description
+			kwargs['description'] = description
+
+		for k in list(kwargs):
+			if not (isinstance(kwargs[k], type) or isinstance(kwargs[k], types.FunctionType)):
+				extra[k] = kwargs[k]
+			if k not in ['default', 'default_factory', 'description']:
+				kwargs.pop(k)
+
+		return PydanticField(*args, json_schema_extra=extra, **kwargs)
 
 	@classmethod
 	def is_o_type(cls, tp: Any) -> bool:
@@ -105,7 +121,8 @@ class O(BaseModel):
 		true_fields  = {}
 		false_fields = {}
 		for name, field in cls.model_fields.items():
-			info         = getattr(field, 'json_schema_extra', {}) or {}
+			info         = field.json_schema_extra or {}
+			print(info)
 			flag         = info.get(by, True)
 			target       = false_fields if flag is False else true_fields
 			desc         = info.get('description', None)
@@ -114,17 +131,28 @@ class O(BaseModel):
 			default      = field.default if field.default is not None else ...
 			target[name] = (field.annotation, default, field_kwargs)
 
+		# def make_schema(suffix, fields):
+		# 	attrs = {}
+		# 	for k, (ann, default, field_kwargs) in fields.items():
+		# 		attrs[k] = Field(default, **field_kwargs)
+		# 	return type(f'{cls.__name__}__{suffix}', (O,), attrs)
+		
 		def make_schema(suffix, fields):
-			attrs = {}
+			annotations = {}
+			namespace = {}
+
 			for k, (ann, default, field_kwargs) in fields.items():
-				attrs[k] = Field(default, **field_kwargs)
-			return type(f'{cls.__name__}__{suffix}', (O,), attrs)
+				annotations[k] = ann
+				namespace[k]   = PydanticField(default, **field_kwargs)
+
+			namespace['__annotations__'] = annotations
+			return type(f'{cls.__name__}__{suffix}', (O,), namespace)
+
 
 		TrueSchema  = make_schema('True',  true_fields)
 		FalseSchema = make_schema('False', false_fields)
 		return TrueSchema, FalseSchema
-
-
+	
 	# Getters
 	############################################################################
 
@@ -163,6 +191,7 @@ class O(BaseModel):
 		return self.__class__(**data)
 
 	def save(self, name=None):
+		print("O.save: self =", self, "type =", type(self))
 		self.db.save(name)
 		return self
 
@@ -172,3 +201,32 @@ class O(BaseModel):
 	def get_description(self, field: str) -> str:
 		info = self.model_fields.get(field)
 		return info.description or ''
+
+##################################################################################
+
+
+from pydantic import ValidationError
+
+def humanize(self):
+	lines = [f'In `{ValidationError.last_model}`']
+	for e in self.errors():
+		var = '.'.join(str(x) for x in e.get('loc', [])) or 'unknown'
+		t1  = e.get('type', 'unknown')
+		v1  = e.get('input', 'unknown')
+		t2  = type(v1).__name__ if v1 != 'unknown' else 'unknown'
+		v1  = str(v1)
+		if len(v1) > 300:
+			v1 = v1[:300] + ' ...'
+		if t1 == 'missing':
+			line = f'  - `{var}`: is missing'
+		else:
+			line = f'  - `{var}`: expected `{t1}`, got `{t2}({v1})`'
+		lines.append(line)
+	return '\n'.join(lines)
+
+def validationerror_str(self):
+	return self.humanize()
+
+ValidationError.humanize = humanize
+ValidationError.__str__  = validationerror_str
+ValidationError.__repr__ = validationerror_str

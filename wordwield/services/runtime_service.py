@@ -14,7 +14,8 @@ from wordwield.lib import (
 
 	O,
 	Operator,
-	Agent
+	Agent,
+	Expert
 )
 
 
@@ -29,6 +30,7 @@ class RuntimeService(DapiService):
 			'PROJECT'      : self.dapi.project,
 			'Operator'     : Operator,
 			'Agent'        : Agent,
+			'Expert'       : Expert,
  
 			'O'            : O,
 			'String'       : String,
@@ -40,16 +42,16 @@ class RuntimeService(DapiService):
 		}
 
 		#-----------------------------------------------------------------#
-		async def _call(name, *args, **kwargs):
+		async def _call(operator_name, *args, **kwargs):
 			if len(args) == 1 and isinstance(args[0], dict) and not kwargs:
 				kwargs = args[0]
 				args   = []
 
 			return await self.call_external_operator(
-				name     = name,
-				args     = list(args),
-				kwargs   = kwargs,
-				context  = context
+				operator_name = operator_name,
+				args          = list(args),
+				kwargs        = kwargs,
+				context       = context
 			)
 
 		operator_globals['call'] = _call
@@ -70,6 +72,10 @@ class RuntimeService(DapiService):
 
 		operator_globals['ask'] = _ask
 		#-----------------------------------------------------------------#
+		async def _schema(schema_name):
+			return self.dapi.type_service.get(schema_name, context)
+		
+		operator_globals['schema'] = _schema
 
 		if type_classes:
 			operator_globals.update(type_classes)
@@ -83,11 +89,11 @@ class RuntimeService(DapiService):
 		operators = await self.dapi.definition_service.get_all()
 		return {op['name'] for op in operators}
 
-	async def call_external_operator(self, name: str, args: list, kwargs: dict, context: ExecutionContext) -> Any:
+	async def call_external_operator(self, operator_name: str, args: list, kwargs: dict, context: ExecutionContext) -> Any:
 		'''External operator call from interpreted code.'''
-		input_dict  = await self.get_input_dict(name, args, kwargs)  # Step 1: Pack input
-		output_dict = await self.invoke(name, input_dict, context)   # Step 2: Full invocation
-		result      = await self.unwrap_output(name, output_dict)    # Step 3: Unpack output to tuple
+		input_dict  = await self.get_input_dict(operator_name, args, kwargs)  # Step 1: Pack input
+		output_dict = await self.invoke(operator_name, input_dict, context)   # Step 2: Full invocation
+		result      = await self.unwrap_output(operator_name, output_dict)    # Step 3: Unpack output to tuple
 		return result
 
 	async def invoke(self, name: str, input: dict, context: ExecutionContext) -> dict:
@@ -128,8 +134,7 @@ class RuntimeService(DapiService):
 			return output
 
 		except Exception as e:
-			raise DapiException.consume(e)
-
+			raise DapiException.consume(e) from None
 		finally:
 			context.pop(detail=str(output))
 

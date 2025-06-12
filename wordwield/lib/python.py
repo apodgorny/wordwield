@@ -1,4 +1,4 @@
-import ast, types, linecache, builtins
+import ast, types, linecache, builtins, time
 from typing import Callable, Awaitable, Any, Dict, List, Optional
 from .execution_context import ExecutionContext
 
@@ -18,13 +18,17 @@ class Python:
 		'isinstance'  : isinstance,
 		'exit'        : exit,
 		'zip'         : zip,
-		'vars'        : vars,
 		'sum'         : sum,
 		'min'         : min,
 		'max'         : max,
 		'iter'        : iter,
 		'next'        : next,
 		'classmethod' : classmethod,
+		'time'        : time.time,
+
+		'getattr'     : getattr,
+		'hasattr'     : hasattr,
+		'setattr'     : setattr,
 
 		'type'        : type,
 		'list'        : list,

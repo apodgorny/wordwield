@@ -39,7 +39,7 @@ class Model:
 
 		except AttributeError:
 			raise ValueError(f'No subclass of Model found in `{file_path}`')
-
+		
 	@classmethod
 	async def generate(
 		cls,
@@ -68,9 +68,6 @@ class Model:
 
 			# Validate output
 			response_model(**result)
-
-			# Unpack to tuple of attributes or single value to match operator output convention
-			result = T(T.DATA, T.ARGUMENTS, result)
 			return result
 
 		except Exception as e:

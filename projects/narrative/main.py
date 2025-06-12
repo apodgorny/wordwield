@@ -25,4 +25,4 @@ ww.init(
 )
 
 ww.verbose = True
-result = ww.invoke(Timeline, name=PROJECT_NAME)
+result = ww.invoke(Timeline, name=PROJECT_NAME, number=42)

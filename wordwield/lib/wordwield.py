@@ -167,6 +167,8 @@ class WordWield:
 				info  = ''
 				parts = []
 
+				detail = detail.get('message', detail) if isinstance(detail, dict) else detail
+
 				if operator : parts.append(f'operator: {operator}')
 				if file     : parts.append(f'file: {Path(file).name}')
 				if line     : parts.append(f'line: {line}')

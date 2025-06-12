@@ -1,4 +1,4 @@
-import os
+import os, traceback
 
 os.environ['PROJECT_PATH'] = os.path.dirname(
 	os.path.dirname(
@@ -27,8 +27,7 @@ app.add_middleware(
 )
 dapi.start(app)
 
-# @app.exception_handler(DapiException)
-# async def dapi_exception_handler(request: Request, exc: DapiException):
-# 	return exc.to_response()
-
-# __all__ = ["app"]
+@app.exception_handler(DapiException)
+async def dapi_exception_handler(request: Request, e: DapiException):
+	# traceback.print_exc()
+	return e.to_response()

@@ -126,31 +126,6 @@ class ODB:
 			return obj
 		return None
 
-	# def _load_edges(self, seen=None):
-	# 	o    = self._o
-	# 	seen = seen or set()
-	# 	key  = (type(o), o.id)
-
-	# 	if key not in seen:
-	# 		seen.add(key)
-	# 		for name, field in o.model_fields.items():
-	# 			if not name in o.__dict__:
-	# 				value = self.get_related(name)
-	# 				if value is None:
-	# 					kind, _ = o.get_field_kind(name)
-	# 					if   kind == 'list' : value = []
-	# 					elif kind == 'dict' : value = {}
-	# 					else                : value = None
-
-	# 				setattr(o, name, value)
-	# 				val = getattr(o, name)
-	# 				if isinstance(val, list):
-	# 					for item in val:
-	# 						if hasattr(item, 'db'):
-	# 							item.db._load_edges(seen)
-	# 				elif hasattr(val, 'db'):
-	# 					val.db._load_edges(seen)
-
 	def _load_edges(self, seen=None):
 		o    = self._o
 		seen = seen or set()
@@ -185,7 +160,6 @@ class ODB:
 					setattr(o, name, value)
 					if hasattr(value, 'db'):
 						value.db._load_edges(seen)
-
 
 	def _save_edges(self):
 		o = self._o

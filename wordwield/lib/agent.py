@@ -18,7 +18,7 @@ class Agent(Operator):
 					return f.read()
 		return None
 
-	async def _get_promptlets(self) -> dict:
+	async def _get_vars(self) -> dict:
 		props = {
 			name: getattr(self, name)
 			for name in dir(self.__class__)
@@ -32,27 +32,27 @@ class Agent(Operator):
 			result[name] = value
 		return result
 	
-	def to_promptlets(self, *args, **kwargs):
+	def to_vars(self, *args, **kwargs):
 		'''
-		Merge all dict-like positional arguments (schemas, dicts) and keyword arguments into self._promptlets.
+		Merge all dict-like positional arguments (schemas, dicts) and keyword arguments into self._vars.
 		For O instances (or any object with .to_dict()), use .to_dict().
 		'''
-		base = getattr(self, '_promptlets', {})
-		promptlets = dict(base)
+		base = getattr(self, '_vars', {})
+		vars = dict(base)
 
 		for obj in args:
 			if hasattr(obj, 'to_dict'):
-				promptlets.update(obj.to_dict())
+				vars.update(obj.to_dict())
 			elif isinstance(obj, dict):
-				promptlets.update(obj)
+				vars.update(obj)
 
-		promptlets.update(kwargs)
-		self._promptlets = promptlets
+		vars.update(kwargs)
+		self._vars = vars
 
 	def fill(self, template: str, **vars) -> str:
 		template = String.unindent(template)
 		matches  = set(re.findall(r'\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}', template))
-		all_vars = {**self._promptlets, **vars}
+		all_vars = {**self._vars, **vars}
 
 		for path in matches:
 			if path not in all_vars:
@@ -71,22 +71,26 @@ class Agent(Operator):
 		return template
 
 	async def ask(self, prompt='', schema=None, **extra_fields):
-		hr            = '-' * 40
-		schema        = schema or self.OutputType
-		llm_schema, _ = schema.split('llm')
-		prompt        = prompt + '\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
+		hr                         = '-' * 40
+		schema                     = schema or self.OutputType
+		llm_schema, non_llm_schema = schema.split('llm')
+		prompt                     = prompt + '\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
 
-		self.log('INPUT', prompt, hr)
+		# self.log('INPUT', prompt, hr)
+		print('NON-LLM', json.dumps(non_llm_schema.to_schema(), indent=4))
+		print('LLM', json.dumps(llm_schema.to_schema(), indent=4))
+		print('&' * 50)
 
 		partial = await self.globals['ask'](
 			prompt         = prompt,
 			response_model = llm_schema
 		)
-
 		full = schema(**{**partial, **extra_fields})
-		self.log('OUTPUT', full, hr)
-		return full
+		# self.log('OUTPUT', full, hr)
+
+		result = T(T.DATA, T.ARGUMENTS, full.to_dict())
+		return result
 
 	async def invoke_decorator(self, *args, **kwargs):
-		self._promptlets = await self._get_promptlets()
+		self._vars = await self._get_vars()
 		return await self.invoke(*args, **kwargs)

@@ -27,6 +27,7 @@ else:
 
 	from .operator          import Operator
 	from .agent             import Agent
+	from .expert            import Expert
 
 	from .execution_context import ExecutionContext
 
