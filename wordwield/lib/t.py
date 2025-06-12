@@ -262,9 +262,6 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 			**fields
 		})
 
-		print(f"Created SQLAlchemy model: {table} ({name})")
-		print("Fields:", fields)
-
 	else:
 		table = model  # Already a table — passthrough
 

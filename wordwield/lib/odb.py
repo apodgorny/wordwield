@@ -206,7 +206,7 @@ class ODB:
 		if name is None or self.get_name() == name:
 			return
 
-		if ODB.load_by_name(name, self.__class__):
+		if ODB.load_by_name(name, self._o.__class__):
 			raise ValueError(f'❌ Name `{name}` already exists')
 
 		self.edges.set(
