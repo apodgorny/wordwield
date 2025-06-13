@@ -27,7 +27,7 @@ class BeatSchema(O):
 
 class VariableSchema(O):
 	varname : str
-	threads : list[str]
+	streams : list[str]
 	length  : Optional[int] = None
 
 class StreamSchema(O):
@@ -35,29 +35,28 @@ class StreamSchema(O):
 	triggers : str              = O.Field(semantic=True, description='Persona name who responds on writing', llm=False, default=None)
 	beats    : Optional[list[BeatSchema]] = O.Field(semantic=True, description='Ordered sequence of thoughts or utterances', default_factory=list, llm=False)
 
-	def __getitem__(self, idx) : return self.beats[idx]
-	def __iter__(self)         : return iter(self.beats)
-	def __len__(self)          : return len(self.beats)
+	def to_list(self):
+		return [beat.text for beat in self.beats]
 
 class AgentSchema(O):
 	name           : str                   = O.Field(description='Character name',   semantic=True)
 	type           : str                   = O.Field(description='Agent class name', semantic=True)
 	template       : str                   = O.Field(description='Agent template')
-	read  : Optional[list[VariableSchema]] = O.Field(description='Threads names for persona to read from', default_factory=list)
-	write : Optional[list[VariableSchema]] = O.Field(description='Threads names for persona to write to',  default_factory=list)
+	read  : Optional[list[VariableSchema]] = O.Field(description='Streams names for persona to read from', default_factory=list)
+	write : Optional[list[VariableSchema]] = O.Field(description='Streams names for persona to write to',  default_factory=list)
 	response_type  : str                   = O.Field(description='LLM response type')
 
 class AgentSelectorSchema(AgentSchema):
 	name           : str                         = O.Field(description='Character name', semantic=True)
 	type           : str                         = O.Field(description='Agent class name', semantic=True)
-	read  : Optional[list[VariableSchema]]         = O.Field(description='Threads names for persona to read from', default_factory=list)
-	write_true : Optional[list[VariableSchema]]         = O.Field(description='Threads names for persona to write to',  default_factory=list)
-	write_false : Optional[list[VariableSchema]]         = O.Field(description='Threads names for persona to write to',  default_factory=list)
+	read  : Optional[list[VariableSchema]]         = O.Field(description='Streams names for persona to read from', default_factory=list)
+	write_true : Optional[list[VariableSchema]]         = O.Field(description='Streams names for persona to write to',  default_factory=list)
+	write_false : Optional[list[VariableSchema]]         = O.Field(description='Streams names for persona to write to',  default_factory=list)
 	 
 class TimelineSchema(O):
 	name     : str
 	agents   : list[AgentSchema]  = O.Field(semantic=True, description='All active personas in the timeline')
-	streams  : list[StreamSchema] = O.Field(semantic=True, description='All active threads in the timeline')
+	streams  : list[StreamSchema] = O.Field(semantic=True, description='All active streams in the timeline')
 
 class SelectorSchema(O):
 	is_true : bool

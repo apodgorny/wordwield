@@ -63,7 +63,7 @@ class String:
 	def unindent(text: str) -> str:
 		'''Removes common leading whitespace from all lines.'''
 		import textwrap
-		return textwrap.dedent(text)
+		return textwrap.dedent(text).strip()
 
 	@staticmethod
 	def is_empty(s: str) -> bool:

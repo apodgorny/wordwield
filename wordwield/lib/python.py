@@ -4,7 +4,7 @@ from .execution_context import ExecutionContext
 
 
 class Python:
-	BLOCKED_CALLS   = {'eval', 'exec', 'getattr', 'setattr', '__import__'}
+	BLOCKED_CALLS   = {'eval', 'exec', 'setattr', '__import__'}
 	BLOCKED_ATTRS   = {'__dict__', '__class__', '__globals__', '__code__'}
 	BLOCKED_GLOBALS = [
 		'__import__', 'eval', 'exec', 'open', 'compile', 'globals', 'locals',
@@ -28,7 +28,6 @@ class Python:
 
 		'getattr'     : getattr,
 		'hasattr'     : hasattr,
-		'setattr'     : setattr,
 
 		'type'        : type,
 		'list'        : list,

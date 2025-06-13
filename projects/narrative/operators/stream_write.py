@@ -10,7 +10,7 @@ from schemas.schemas import (
 
 class StreamWrite(Operator):
 	class InputType(O):
-		names  : list[str]       # Names of threads (one or many)
+		names  : list[str]       # Names of streams (one or many)
 		beat   : BeatSchema
 
 	class OutputType(O):

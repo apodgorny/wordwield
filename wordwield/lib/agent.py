@@ -1,5 +1,7 @@
 import os, re, json, inspect
 
+from jinja2 import Environment, BaseLoader
+
 from .operator  import Operator
 from .string    import String
 from .o         import O
@@ -51,24 +53,10 @@ class Agent(Operator):
 
 	def fill(self, template: str, **vars) -> str:
 		template = String.unindent(template)
-		matches  = set(re.findall(r'\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}', template))
 		all_vars = {**self._vars, **vars}
-
-		for path in matches:
-			if path not in all_vars:
-				raise ValueError(f'[LLM] Field `{path}` mentioned in template, but not supplied')
-
-			# Convert all pydantic/o objects in data into plain data
-			value = T(T.PYDANTIC, T.DATA, all_vars[path]) # type: ignore
-
-			if isinstance(value, (dict, list)):
-				value = json.dumps(value, indent=4, ensure_ascii=False)
-			else:
-				value = str(value)
-
-			template = template.replace(f'{{{{{path}}}}}', value)
-
-		return template
+		env      = Environment(loader=BaseLoader())
+		jinja    = env.from_string(template)
+		return String.unindent(jinja.render(**all_vars))
 
 	async def ask(self, prompt='', schema=None, **extra_fields):
 		hr                         = '-' * 40

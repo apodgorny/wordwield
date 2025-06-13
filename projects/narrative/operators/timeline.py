@@ -33,20 +33,25 @@ class Timeline(Operator):
 					read = [
 						VariableSchema(
 							varname = 'history',
-							threads = ['numbers', 'comments'],
+							streams = ['numbers', 'comments'],
 							length  = -1
 						)
 					],
 					write = [
 						VariableSchema(
 							varname = 'guessed_number',
-							threads = ['numbers']
+							streams = ['numbers']
 						)
 					],
 					template = '''
-						Guess history:
-						{history}.
-						Based on guess history try to guess a number.
+						{% if history %}
+							History of previous guesses:
+							{{ history }}
+							Based on guess history try to provide a better number guess.
+						{% else %}
+							Guess a number between 0 and 100
+						{% endif %}
+						Only output a number, nothing else, please. e.g: 42, 1, 3
 					''',
 					response_type = 'NumberSchema'
 				),
@@ -56,25 +61,25 @@ class Timeline(Operator):
 					read = [
 						VariableSchema(
 							varname = 'guessed_number',
-							threads = ['numbers'],
+							streams = ['numbers'],
 							length  = 1
 						),
 						VariableSchema(
 							varname = 'correct_number',
-							threads = ['source'],
+							streams = ['source'],
 							length  = 1
 						)
 					],
 					write_true = [
 						VariableSchema(
 							varname = 'comment',
-							threads = ['comments']
+							streams = ['comments']
 						),
 					],
 					write_false = [
 						VariableSchema(
 							varname = 'guessed_number',
-							threads = ['target']
+							streams = ['target']
 						)
 					],
 					template = '''
@@ -112,4 +117,4 @@ class Timeline(Operator):
 			name = start_agent.name
 		)
 		result = await stream_read('target')
-		return f'You guessed: {result[0]}'
+		return f'You guessed: {result}'

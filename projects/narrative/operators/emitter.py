@@ -16,10 +16,14 @@ class Emitter(Expert):
 	AgentType    = AgentSchema
 	ResponseType = BeatSchema
 
-	async def read(self, agent) -> dict:
+	async def read(self) -> dict:
 		print('READING VARS:')
-		for var in agent.read:
-			print('----var', var.varname)
+		vars = {}
+		for var in self.data.read:
+			vars[var.varname] = await stream_read(var.streams, var.length)
+			print('----var', var.varname, var.streams)
+			print(vars[var.varname])
+		return vars
 
 	async def write(self, result: O):
 		pass
