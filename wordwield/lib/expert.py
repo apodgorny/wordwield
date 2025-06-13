@@ -9,11 +9,10 @@ class Expert(Agent):
 		text: str
 
 	async def read(self, agent) -> dict:
-		for var in agent.read:
-			print(var.name)
+		raise NotImplementedError(f'`{self.__class__.__name__}` must implement `self.read()`')
 
 	async def write(self, result: O):
-		pass
+		raise NotImplementedError(f'`{self.__class__.__name__}` must implement `self.write()`')
 
 	async def invoke(self, name):
 		agent = self.AgentType.load(name)
@@ -22,7 +21,7 @@ class Expert(Agent):
 		print('Read', read_vars)
 		self.to_vars(read_vars)
 		print('Vars', self._vars)
-		prompt = self.fill(self.template)
+		prompt = self.fill(agent.template)
 		print('Prompt', prompt)
 		result = await self.ask(prompt=prompt, schema=self.ResponseType)
 		await self.write(result)

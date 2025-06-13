@@ -26,7 +26,7 @@ class BeatSchema(O):
 ###########################################################################################
 
 class VariableSchema(O):
-	name    : str
+	varname : str
 	threads : list[str]
 	length  : Optional[int] = None
 
@@ -40,11 +40,12 @@ class StreamSchema(O):
 	def __len__(self)          : return len(self.beats)
 
 class AgentSchema(O):
-	name           : str                         = O.Field(description='Character name', semantic=True)
-	type           : str                         = O.Field(description='Agent class name', semantic=True)
-	# voices         : Optional[list[VoiceSchema]] = O.Field(description='Voices belonging to this character', default_factory=list)
-	read  : Optional[list[VariableSchema]]         = O.Field(description='Threads names for persona to read from', default_factory=list)
-	write : Optional[list[VariableSchema]]         = O.Field(description='Threads names for persona to write to',  default_factory=list)
+	name           : str                   = O.Field(description='Character name',   semantic=True)
+	type           : str                   = O.Field(description='Agent class name', semantic=True)
+	template       : str                   = O.Field(description='Agent template')
+	read  : Optional[list[VariableSchema]] = O.Field(description='Threads names for persona to read from', default_factory=list)
+	write : Optional[list[VariableSchema]] = O.Field(description='Threads names for persona to write to',  default_factory=list)
+	response_type  : str                   = O.Field(description='LLM response type')
 
 class AgentSelectorSchema(AgentSchema):
 	name           : str                         = O.Field(description='Character name', semantic=True)

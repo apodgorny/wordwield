@@ -3,11 +3,15 @@ from typing   import Any, get_args, get_origin, Union, List, Dict
 
 from pydantic import BaseModel, Field as PydanticField, model_validator
 
-from .t   import T
-from .odb import ODB
+from .predicates import is_list, is_dict, unwrap_optional
+from .t          import T
+from .odb        import ODB
 
 
 class O(BaseModel):
+	model_config = {
+		'extra': 'forbid'
+	}
 
 	# Magic
 	############################################################################
@@ -74,17 +78,20 @@ class O(BaseModel):
 	@classmethod
 	def get_field_kind(cls, name, tp=None):
 		tp = tp or cls.model_fields[name].annotation
+		tp = unwrap_optional(tp)  # Всегда убираем Optional
 
 		if O.is_o_type(tp):
 			return 'single', tp
 
-		if get_origin(tp) in (list, List):
+		if is_list(tp):
 			sub = get_args(tp)[0]
+			sub = unwrap_optional(sub)
 			if O.is_o_type(sub):
 				return 'list', sub
 
-		if get_origin(tp) in (dict, Dict):
+		if is_dict(tp):
 			k, v = get_args(tp)
+			v = unwrap_optional(v)
 			if k is str and O.is_o_type(v):
 				return 'dict', v
 
@@ -174,7 +181,7 @@ class O(BaseModel):
 		return self.__class__(**data)
 
 	def save(self):
-		print('SAVING', self)
+		# print('SAVING', self)
 		self.db.save()
 		return self
 
@@ -223,6 +230,8 @@ def humanize(self):
 			v1 = v1[:300] + ' ...'
 		if t1 == 'missing':
 			line = f'  - `{var}`: is missing'
+		elif t1 == 'extra_forbidden':
+			line = f'  - `{var}`: is unexpected'
 		else:
 			line = f'  - `{var}`: expected `{t1}`, got `{t2}({v1})`'
 		lines.append(line)

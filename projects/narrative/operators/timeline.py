@@ -32,14 +32,14 @@ class Timeline(Operator):
 					type = 'emitter',
 					read = [
 						VariableSchema(
-							name    = 'history',
+							varname = 'history',
 							threads = ['numbers', 'comments'],
 							length  = -1
 						)
 					],
 					write = [
 						VariableSchema(
-							name    = 'guessed_number',
+							varname = 'guessed_number',
 							threads = ['numbers']
 						)
 					],
@@ -55,25 +55,25 @@ class Timeline(Operator):
 					type = 'selector',
 					read = [
 						VariableSchema(
-							name    = 'guessed_number',
+							varname = 'guessed_number',
 							threads = ['numbers'],
 							length  = 1
 						),
 						VariableSchema(
-							name    = 'correct_number',
+							varname = 'correct_number',
 							threads = ['source'],
 							length  = 1
 						)
 					],
 					write_true = [
 						VariableSchema(
-							name    = 'comment',
+							varname = 'comment',
 							threads = ['comments']
 						),
 					],
 					write_false = [
 						VariableSchema(
-							name    = 'guessed_number',
+							varname = 'guessed_number',
 							threads = ['target']
 						)
 					],

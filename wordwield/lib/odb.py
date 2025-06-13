@@ -125,14 +125,26 @@ class ODB:
 			if hasattr(child, 'db'):
 				child.db._load_edges(seen)
 
+	# def _save_edges(self):
+	# 	o = self._o
+	# 	s = self.session
+
+	# 	for name, field in o.model_fields.items():
+	# 		reverse = field.json_schema_extra.get('reverse') if field.json_schema_extra else None
+	# 		for key, child in o.iter_nested():
+	# 			self._save_edge(src=o, tgt=child, rel1=name, rel2=reverse, key1=key)
+
 	def _save_edges(self):
 		o = self._o
-		s = self.session
-
 		for name, field in o.model_fields.items():
-			reverse = field.json_schema_extra.get('reverse') if field.json_schema_extra else None
 			for key, child in o.iter_nested():
-				self._save_edge(src=o, tgt=child, rel1=name, rel2=reverse, key1=key)
+				val = getattr(o, name, None)
+				if (
+					(isinstance(val, list)  and child in val) or
+					(isinstance(val, dict)  and child in val.values()) or
+					(o.is_o_instance(val)   and child is val)
+				):
+					self._save_edge(src=o, tgt=child, rel1=name, rel2=None, key1=key, key2='')
 
 	def _save_edge(self, src, tgt, rel1, rel2, key1='', key2=''):
 		if (

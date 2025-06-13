@@ -13,10 +13,13 @@ class Emitter(Expert):
 	class OutputType(O):
 		status : int = 0
 
-	AgentType = AgentSchema
+	AgentType    = AgentSchema
 	ResponseType = BeatSchema
 
-	template = '''
-		{history}
-		Based on previous guesses and responses guess a correct number.
-	'''
+	async def read(self, agent) -> dict:
+		print('READING VARS:')
+		for var in agent.read:
+			print('----var', var.varname)
+
+	async def write(self, result: O):
+		pass

@@ -27,7 +27,6 @@ class StreamWrite(Operator):
 				print('namess', name)
 				stream = StreamSchema(name=name, beats=[])
 			stream.beats.append(beat)
-			print('Saving stream', name, flush=True)
 			stream.save()
 			if stream.triggers:
 				agent = AgentSchema.load(stream.triggers)
