@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from wordwield.lib import Model
 
 
-class ModelOllama(Model):
+class OllamaModel(Model):
 	def __init__(self, name: str):
 		self.name   = name
 		self.client = ollama

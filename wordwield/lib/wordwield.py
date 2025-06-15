@@ -127,15 +127,16 @@ class WordWield:
 	
 	@classmethod
 	async def ask(
+		cls,
 		prompt,
-		response_model,
-
+		schema,
 		model_id    = 'ollama::gemma3:4b',
 		temperature = 0.0
 	):
 		return await Model.generate(
+			ww              = cls,
 			prompt          = prompt,
-			response_model  = response_model,
+			response_schema = schema,
 			model_id        = model_id,
 			temperature     = temperature
 		)

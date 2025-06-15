@@ -38,6 +38,13 @@ class Module:
 			if issubclass(obj, base_class) and obj is not base_class:
 				found.append(obj)
 		return found
+	
+	@staticmethod
+	def find_class_by_base(base_class: Type, file_path: str):
+		results = Module.find_all_classes_by_base(base_class=base_class, file_path=file_path)
+		if results:
+			return results[0]
+		return None
 
 	@staticmethod
 	def get_exports(file_path: str) -> list[str]:

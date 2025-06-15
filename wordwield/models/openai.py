@@ -5,7 +5,7 @@ from openai import OpenAI
 from wordwield.lib import Model
 
 
-class ModelOpenai(Model):
+class OpenaiModel(Model):
 	def __init__(self, name='gpt-4o'):
 		super().__init__(name)
 		self.client = OpenAI()

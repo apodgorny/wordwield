@@ -14,24 +14,17 @@ class Model:
 	##################################################################
 
 	@classmethod
-	def load(cls, model_id: str, models_path: str) -> 'Model':
+	def load(cls, model_id, models_registry):
 		if '::' not in model_id:
 			raise ValueError(f'Invalid model_id: `{model_id}`. Expected format `provider::name`')
 
-		provider, name = model_id.split('::', 1)
-		file_path      = os.path.join(models_path, f'model_{provider}.py')
+		provider, model_name = model_id.split('::', 1)
+		model_key            = f'{String.snake_to_camel(provider)}Model'
+		model_class          = models_registry[model_key]
+		model                = model_class(model_name)
+		model.model_id       = model_id
 
-		try:
-			model_cls         = Module.find_class_by_base(cls, file_path)
-			instance          = model_cls(name)
-			instance.model_id = model_id
-			return instance
-
-		except FileNotFoundError:
-			raise ValueError(f'Model file not found: `{file_path}`')
-
-		except AttributeError:
-			raise ValueError(f'No subclass of Model found in `{file_path}`')
+		return model
 		
 	##################################################################
 		
@@ -40,30 +33,30 @@ class Model:
 		cls,
 		ww,
 		
-		prompt         : str,
-		response_model : O,
+		prompt          : str,
+		response_schema : O,
 
-		model_id       : str        = 'ollama::gemma3:4b',
-		role           : str        = 'user',
-		temperature    : float      = 0.0,
-		system         : str | None = None
+		model_id        : str        = 'ollama::gemma3:4b',
+		role            : str        = 'user',
+		temperature     : float      = 0.0,
+		system          : str | None = None
 
 	) -> dict:
 		try:
-			if not issubclass(response_model, O):
-				raise ValueError(f'Model.generate requires `response_model` to be a subclass of `O`, but received `{type(response_model)}`')
+			if not issubclass(response_schema, O):
+				raise ValueError(f'Model.generate requires `response_model` to be a subclass of `O`, but received `{type(response_schema)}`')
 
-			model  = Model.load(model_id, ww.config['MODELS_DIR'])
+			model  = Model.load(model_id, ww.models)
 			result = await model(
 				prompt          = prompt,
-				response_schema = response_model.to_schema(),
+				response_schema = response_schema.to_schema(),
 				role            = role,
 				temperature     = temperature,
 				system          = system
 			)
 
 			# Validate output
-			response_model(**result)
+			response_schema(**result)
 			return result
 
 		except Exception as e:

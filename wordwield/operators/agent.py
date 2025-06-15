@@ -57,8 +57,8 @@ class Agent(Operator):
 		prompt                     = prompt + '\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
 
 		partial = await self.ww.ask(
-			prompt         = prompt,
-			response_model = llm_schema
+			prompt = prompt,
+			schema = llm_schema
 		)
 		full = schema(**{**partial, **extra_fields})
 		return full.unpack()
