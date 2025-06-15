@@ -8,25 +8,18 @@ from .o               import O
 from .t               import T
 from .dapi_exception  import DapiException
 
-PROJECT_PATH = os.environ.get('PROJECT_PATH')
-MODELS_DIR   = os.environ.get('MODELS_DIR')
-MODELS_PATH  = os.path.join(PROJECT_PATH, MODELS_DIR)
-
 
 class Model:
-
-	def __init__(self, name: str):
-		self.name = name
 
 	##################################################################
 
 	@classmethod
-	def load(cls, model_id: str) -> 'Model':
+	def load(cls, model_id: str, models_path: str) -> 'Model':
 		if '::' not in model_id:
 			raise ValueError(f'Invalid model_id: `{model_id}`. Expected format `provider::name`')
 
 		provider, name = model_id.split('::', 1)
-		file_path      = os.path.join(MODELS_PATH, f'model_{provider}.py')
+		file_path      = os.path.join(models_path, f'model_{provider}.py')
 
 		try:
 			model_cls         = Module.find_class_by_base(cls, file_path)
@@ -40,9 +33,12 @@ class Model:
 		except AttributeError:
 			raise ValueError(f'No subclass of Model found in `{file_path}`')
 		
+	##################################################################
+		
 	@classmethod
 	async def generate(
 		cls,
+		ww,
 		
 		prompt         : str,
 		response_model : O,
@@ -57,7 +53,7 @@ class Model:
 			if not issubclass(response_model, O):
 				raise ValueError(f'Model.generate requires `response_model` to be a subclass of `O`, but received `{type(response_model)}`')
 
-			model  = Model.load(model_id)
+			model  = Model.load(model_id, ww.config['MODELS_DIR'])
 			result = await model(
 				prompt          = prompt,
 				response_schema = response_model.to_schema(),

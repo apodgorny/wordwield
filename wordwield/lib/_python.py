@@ -45,6 +45,9 @@ class Python:
 		'Any'         : Any,
 		'Callable'    : Callable,
 		'Awaitable'   : Awaitable,
+
+		'KeyError'    : KeyError,
+		'ValueError'  : ValueError,
 		
 		'property'    : property,
 

@@ -10,7 +10,8 @@ from .odb        import ODB
 
 class O(BaseModel):
 	model_config = {
-		'extra': 'forbid'
+		'extra': 'forbid',
+		'from_attributes': True
 	}
 
 	# Magic
@@ -110,6 +111,10 @@ class O(BaseModel):
 		return ODB.load(ref, cls)
 	
 	@classmethod
+	def pack(cls, args):
+		return T(T.ARGUMENTS, T.PYDANTIC, cls, args)
+	
+	@classmethod
 	def split(cls, by: str):
 		'''
 			Splits the schema into two:
@@ -162,6 +167,7 @@ class O(BaseModel):
 	def to_json(self, r=False)          -> str  : return json.dumps(self.to_dict(r, e=True), indent=4, ensure_ascii=False)
 	def to_dict(self, r=False, e=False) -> dict : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
 	def to_tree(self)                   -> str  : return T(T.PYDANTIC, T.TREE, self)
+	def unpack(self)                            : return T(T.PYDANTIC, T.ARGUMENTS, self)
 
 	def to_semantic_hint(self) -> str:
 		data   = T(T.PYDANTIC, T.DATA, self)

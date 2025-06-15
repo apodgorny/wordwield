@@ -13,7 +13,10 @@ def unwrap_optional(tp):
 def is_atomic_type(tp):
 	# Atomic — int, str, float, bool
 	tp = unwrap_optional(tp)
-	return tp in (int, str, float, bool)
+	return tp in (int, str, float, bool, complex)
+
+def is_atomic(value):
+	return is_atomic_type(type(value))
 
 def is_atomic_list(tp):
 	# Проверяем list[atomic]

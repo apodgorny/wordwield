@@ -1,6 +1,6 @@
-import sys, os
+import sys, os, asyncio
 
-LOG_DIR       = 'logs'
+LOG_DIR       = 'logs' 
 EXPERTISE_DIR = 'expertise'
 PROJECT_PATH  = os.path.abspath(os.path.dirname(__file__))
 PROJECT_NAME  = os.path.basename(PROJECT_PATH)
@@ -11,18 +11,15 @@ if ROOT not in sys.path:
 
 from wordwield import ww
 
-from operators import (
-	Timeline
-)
-
 ################################################################
 
-ww.init(
-	PROJECT_NAME  = PROJECT_NAME,
-	PROJECT_PATH  = PROJECT_PATH,
-	LOG_DIR       = LOG_DIR,
-	EXPERTISE_DIR = EXPERTISE_DIR
-)
+def main():
+	ww.init(
+		PROJECT_NAME=PROJECT_NAME,
+		PROJECT_PATH=PROJECT_PATH,
+	)
+	# Now run the async call in the event loop
+	asyncio.run(ww.operators.Test()())
 
-ww.verbose = True
-result = ww.invoke(Timeline, name=PROJECT_NAME, number=42)
+if __name__ == "__main__":
+	main()

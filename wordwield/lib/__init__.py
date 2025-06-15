@@ -1,37 +1,18 @@
-import os
-from dotenv import load_dotenv
+from .string            import String
+from .highlight         import Highlight
 
-load_dotenv()
+from .module            import Module
+from .o                 import O
+from .t                 import T
+from .model             import Model
 
+from .operator          import Operator
 
-if 'CLIENT' in os.environ:
-	from .string            import String
-	from .highlight         import Highlight
-	from .wordwield         import WordWield
-	from .code              import Code
+from .execution_context import ExecutionContext
 
-	from .o                 import O
-	from .operator          import Operator
-	from .agent             import Agent
+from .reserved          import is_reserved
 
-else:
-	from .dapi              import Dapi, DapiException, DapiService
-	from .python            import Python
+from .edge              import Edge
+from .record            import Record
 
-	from .string            import String
-	from .highlight         import Highlight
-
-	from .module            import Module
-	from .o                 import O
-	from .model             import Model
-
-	from .operator          import Operator
-	from .agent             import Agent
-	from .expert            import Expert
-
-	from .execution_context import ExecutionContext
-
-	from .reserved          import is_reserved
-
-	from .edge              import Edge
-	from .record            import Record
+from .registry          import Registry, ExpertiseRegistry

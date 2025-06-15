@@ -1,5 +1,5 @@
 from wordwield.lib import O, Operator
-from schemas.schemas import (
+from wordwield.schemas.project import (
 	StreamSchema,
 )
 
@@ -12,7 +12,7 @@ class StreamRead(Operator):
 		num_beats : int = 1		# How many most recent beats to read; <0 for all
 
 	class OutputType(O):
-		items : list[str]    # Zipped list of all beats from all streams, sorted by timestamp
+		stream : StreamSchema   # Zipped list of all beats from all streams, sorted by timestamp
 
 	async def invoke(self, names, num_beats=None):
 		all_beats = []
@@ -24,5 +24,5 @@ class StreamRead(Operator):
 
 		# Sort all beats by timestamp to create a single unified “conversation” timeline
 		all_beats.sort(key=lambda b: b.timestamp)
-		return StreamSchema(name='+'.join(names), beats=all_beats).to_list()
+		return StreamSchema(name='+'.join(names), beats=all_beats)
 	

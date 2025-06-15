@@ -1,2 +1,2 @@
-from .lib.wordwield import WordWield
-from .lib.wordwield import WordWield as ww
+from wordwield.lib.wordwield import WordWield as ww
+from wordwield.lib.wordwield import WordWield

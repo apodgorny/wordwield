@@ -1,8 +1,8 @@
 from wordwield.lib import O, Operator
-from schemas.schemas import (
+from wordwield.schemas.project import (
 	BeatSchema,
 	StreamSchema,
-	AgentSchema
+	ExpertSchema
 )
 
 # StreamWrite
@@ -11,25 +11,28 @@ from schemas.schemas import (
 class StreamWrite(Operator):
 	class InputType(O):
 		names  : list[str]       # Names of streams (one or many)
-		beat   : BeatSchema
+		text   : str
 
 	class OutputType(O):
 		status : int
 
-	async def invoke(self, names, beat):
+	async def invoke(self, names, text):
 		if isinstance(names, str):
 			names = [names]
 
+		beat = BeatSchema(text=str(text))
+
 		for name in names:
-			print(name)
 			stream = StreamSchema.load(name)
 			if stream is None:
-				print('namess', name)
 				stream = StreamSchema(name=name, beats=[])
 			stream.beats.append(beat)
 			stream.save()
+			print(f'STREAM: `{text}` => `{name}`')
 			if stream.triggers:
-				agent = AgentSchema.load(stream.triggers)
+				agent = ExpertSchema.load(stream.triggers)
+				if agent is None:
+					raise KeyError(f'Could not delegate task. Agent `{stream.triggers}` is not found')
 				await self.call(agent.type, name=agent.name)
 		return 0
 

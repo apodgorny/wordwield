@@ -14,8 +14,6 @@ from wordwield.lib import (
 
 	O,
 	Operator,
-	Agent,
-	Expert
 )
 
 
@@ -29,8 +27,6 @@ class RuntimeService(DapiService):
 		operator_globals = {
 			'PROJECT'      : self.dapi.project,
 			'Operator'     : Operator,
-			'Agent'        : Agent,
-			'Expert'       : Expert,
  
 			'O'            : O,
 			'String'       : String,
@@ -73,7 +69,7 @@ class RuntimeService(DapiService):
 		operator_globals['ask'] = _ask
 		#-----------------------------------------------------------------#
 		async def _schema(schema_name):
-			return self.dapi.type_service.get(schema_name, context)
+			return await self.dapi.type_service.get(schema_name, context)
 		
 		operator_globals['schema'] = _schema
 
