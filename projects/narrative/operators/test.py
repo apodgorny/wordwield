@@ -9,3 +9,5 @@ class Test(ww.operators.Agent):
 	async def invoke(self):
 		answer = await self.ask(prompt='Who is Alexander Podgorny?', schema=self.ResponseSchema)
 		return answer
+
+

@@ -12,28 +12,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from wordwield.lib.record           import Record
 
 
-class TypeRecord(Record):
-	__tablename__ = 'types'
-
-	name         : Mapped[str]             = mapped_column(String(255),                  primary_key=True, comment='Unique type name (also class name)')
-	description  : Mapped[str]             = mapped_column(Text,                         nullable=True,    comment='Optional type description')
-	code         : Mapped[str]             = mapped_column(Text,                         nullable=False,   comment='Python source code of the type')
-
-class OperatorRecord(Record):
-	__tablename__ = 'operators'
-
-	name         : Mapped[str]             = mapped_column(String(255),                  primary_key=True, comment='Unique operator name')
-	class_name   : Mapped[str]             = mapped_column(String(255),                  nullable=False,   comment='Unique operator class name')
-	description  : Mapped[str]             = mapped_column(Text,                         nullable=True,    comment='Optional operator description')
-	code         : Mapped[str]             = mapped_column(Text,                         nullable=True,    comment='Source code or prompt (or empty for composite)')
-	restrict     : Mapped[bool]            = mapped_column(Boolean,                      default=True,     nullable=False, comment='If True, apply interpreter restrictions')
-	
-	input_type   : Mapped[Dict[str, Any]]  = mapped_column(JSON,                         nullable=False,   comment='Full JSON Schema')
-	output_type  : Mapped[Dict[str, Any]]  = mapped_column(JSON,                         nullable=False,   comment='Full JSON Schema')
-
-	scope        : Mapped[Dict[str, Any]]  = mapped_column(MutableDict.as_mutable(JSON), default=dict,     comment='Runtime scope for function operators')
-	config       : Mapped[Dict[str, Any]]  = mapped_column(MutableDict.as_mutable(JSON), default=dict,     comment='Configuration passed to interpreter')
-
 class EdgeRecord(Record):
 	__tablename__ = 'edges'
 	__table_args__ = (
@@ -50,7 +28,6 @@ class EdgeRecord(Record):
 	key1    = Column(String, nullable=False, default='')  # Key/index for the source (used for List/Dict: list index or dict key; empty for direct relations)
 	key2    = Column(String, nullable=False, default='')  # Key/index for the target (used for List/Dict on the reverse side; usually empty)
 	created = Column(DateTime, default=datetime.utcnow)   # Timestamp when this edge record was created (UTC)
-
 
 	def __repr__(self):
 		key1 = f'[{self.key1}]' if self.key1 else ''

@@ -2,6 +2,11 @@ import os
 import sys
 from dotenv import dotenv_values
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from wordwield.lib.odb import ODB
+from wordwield.lib.record import Base
+
 from wordwield.lib import (
 	Operator,
 	Module,
@@ -22,7 +27,7 @@ class WordWield:
 	models         = None
 
 	@classmethod
-	def init(cls, PROJECT_NAME, PROJECT_PATH):
+	def init(cls, PROJECT_NAME, PROJECT_PATH, reset_db=True):
 		cls.operators = Registry(cls, 'operators')
 		cls.schemas   = Registry(cls, 'schemas')
 		cls.models    = Registry(cls, 'models')
@@ -30,6 +35,8 @@ class WordWield:
 		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)
 		cls._register_builtins()
 		cls._register_project()
+
+		cls._init_db(drop_existing=reset_db)
 
 		cls.is_initialized = True
 		cls.log_success(f"Project '{PROJECT_NAME}' initialized in '{PROJECT_PATH}'")
@@ -102,6 +109,41 @@ class WordWield:
 			if os.path.isdir(subdir) and not entry.startswith('__'):
 				subreg = registry.subregistry(entry)
 				cls._register(subdir, subreg, base_class)
+
+	@classmethod
+	def _init_db(cls, drop_existing=False):
+		'''
+		Initialize or reset DB engine/session and create all tables.
+		If drop_existing is True, drop all tables but do NOT delete the file.
+		'''
+		db_path = cls.config.get('DB_PATH') or cls.config.get('DB_FILE')
+		db_url  = f'sqlite:///{db_path}'
+
+		# Ensure directory is writable
+		parent_dir = os.path.dirname(db_path) or '.'
+		if not os.access(parent_dir, os.W_OK):
+			raise RuntimeError(f'❌ Cannot create DB file: Directory `{parent_dir}` is not writable.')
+
+		engine = create_engine(db_url, connect_args={'check_same_thread': False}, echo=False)
+		Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+		session = Session()
+
+		cls.engine = engine
+		cls.db     = session
+		ODB.session = session
+
+		if drop_existing:
+			# --- Drop all tables, but do NOT remove the file ---
+			from sqlalchemy import inspect, text
+			inspector = inspect(engine)
+			with engine.begin() as conn:
+				for table_name in inspector.get_table_names():
+					conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
+			cls.log_info('All tables dropped (DB file retained)')
+
+		# Recreate all tables from models
+		Base.metadata.create_all(bind=engine)
+		cls.log_success(f'Database initialized at {db_path}')
 
 	@classmethod
 	def log(cls, msg, color=''):

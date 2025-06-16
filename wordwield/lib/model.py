@@ -6,7 +6,7 @@ from .module          import Module
 from .string          import String
 from .o               import O
 from .t               import T
-from .dapi_exception  import DapiException
+from .ww_exception  import WwException
 
 
 class Model:
@@ -60,4 +60,4 @@ class Model:
 			return result
 
 		except Exception as e:
-			raise DapiException.consume(e)
+			raise WwException.consume(e)
