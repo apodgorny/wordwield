@@ -1,7 +1,7 @@
 from wordwield.lib import O, Operator
 from wordwield.schemas.project import (
-	BeatSchema,
 	StreamSchema,
+	GulpSchema,
 	ExpertSchema
 )
 
@@ -20,13 +20,13 @@ class StreamWrite(Operator):
 		if isinstance(names, str):
 			names = [names]
 
-		beat = BeatSchema(text=str(text))
+		gulp = GulpSchema(text=str(text))
 
 		for name in names:
 			stream = StreamSchema.load(name)
 			if stream is None:
-				stream = StreamSchema(name=name, beats=[])
-			stream.beats.append(beat)
+				stream = StreamSchema(name=name, gulps=[])
+			stream.beats.append(gulp)
 			stream.save()
 			print(f'STREAM: `{text}` => `{name}`')
 			if stream.triggers:

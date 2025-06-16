@@ -7,12 +7,6 @@ from wordwield.schemas.project import (
 
 
 class Expert(Agent):
-	class InputType(O):
-		name: str
-
-	class OutputType(O):
-		status: int
-
 	async def read(self) -> dict:
 		values = {}
 		for var in self.data.read:

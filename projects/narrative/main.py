@@ -1,7 +1,5 @@
-import sys, os, asyncio
+import sys, os
 
-LOG_DIR       = 'logs' 
-EXPERTISE_DIR = 'expertise'
 PROJECT_PATH  = os.path.abspath(os.path.dirname(__file__))
 PROJECT_NAME  = os.path.basename(PROJECT_PATH)
 
@@ -13,13 +11,8 @@ from wordwield import ww
 
 ################################################################
 
-def main():
-	ww.init(
-		PROJECT_NAME=PROJECT_NAME,
-		PROJECT_PATH=PROJECT_PATH,
-	)
-	# Now run the async call in the event loop
-	asyncio.run(ww.operators.Test()())
-
-if __name__ == "__main__":
-	main()
+ww.init(
+	PROJECT_NAME=PROJECT_NAME,
+	PROJECT_PATH=PROJECT_PATH,
+)
+ww(ww.operators.Narrative('fly')())

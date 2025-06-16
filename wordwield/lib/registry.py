@@ -65,6 +65,15 @@ class Registry:
 		if isinstance(val, tuple):
 			return val[0]
 		return val
+	
+	def __getattr__(self, name):
+		if name in self._items:
+			val = self._items[name]
+			if isinstance(val, tuple):
+				return val[0]
+			return val
+		print(self._items)
+		raise AttributeError(f'Registry `ww.{self._namespace}` has no item `{name}`')
 
 	def all(self):
 		return [v[0] if isinstance(v, tuple) else v for v in self._items.values()]

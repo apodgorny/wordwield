@@ -1,4 +1,5 @@
-from wordwield.lib import O, Operator
+from wordwield.lib import O
+from wordwield import ww
 
 from wordwield.schemas.project import (
 	ProjectSchema,
@@ -7,16 +8,9 @@ from wordwield.schemas.project import (
 	VariableSchema,
 )
 
-class Project(Operator):
-	class InputType(O):
-		name   : str
-		number : int
-
-	class OutputType(O):
-		text: str
-
-	def create(self, name):
-		return None
+class Project(ww.operators.Agent):
+	def __init__(self, name):
+		self.vars = {}
 
 	async def invoke(self, name, number):
 		project = ProjectSchema.load(name) or self.create(name)

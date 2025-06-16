@@ -1,5 +1,4 @@
-import os
-import sys
+import os, sys, asyncio
 from dotenv import dotenv_values
 
 from sqlalchemy import create_engine
@@ -17,8 +16,11 @@ from wordwield.lib import (
 	ExpertiseRegistry
 )
 
+class WordWieldMeta(type):
+	def __call__(cls, coroutine, *args, **kwargs):
+		return asyncio.run(coroutine)
 
-class WordWield:
+class WordWield(metaclass=WordWieldMeta):
 	verbose        = True
 	is_initialized = False
 	config         = {}
@@ -44,15 +46,15 @@ class WordWield:
 
 	@classmethod
 	def _setup_paths(cls, PROJECT_NAME, PROJECT_PATH):
+		cls.config['PROJECT_NAME'] = PROJECT_NAME
+		cls.config['PROJECT_PATH'] = PROJECT_PATH
+
 		cls.config['WW_PATH'] = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 		env = dotenv_values(os.path.join(os.path.dirname(__file__), '.env'))
 
 		db_name = env.get('DB_NAME', PROJECT_NAME)
 		db_file = os.path.abspath(os.path.join(PROJECT_PATH, f"{db_name}.db"))
 		cls.config['DB_PATH'] = db_file
-
-		cls.config['PROJECT_NAME'] = PROJECT_NAME
-		cls.config['PROJECT_PATH'] = PROJECT_PATH
 
 		dir_vars = [
 			('OPERATORS_DIR', 'operators'),
@@ -81,34 +83,59 @@ class WordWield:
 		cls.expertise = ExpertiseRegistry(cls.config['EXPERTISE_DIR'])
 
 	@classmethod
-	def _register(cls, package_path, registry, base_class, origin='wordwield'):
+	def _compile_import_file_list(cls, package_path, registry, base_class, origin='wordwield'):
+		import_list = []
 		package_path = os.path.abspath(package_path)
 		if not os.path.isdir(package_path):
-			return
+			return []
 
-		init_file = os.path.join(package_path, '__init__.py')
-		if not os.path.exists(init_file):
-			with open(init_file, 'w', encoding='utf-8') as f:
-				pass
-
-		# Register .py files in this folder
-		try:
-			classes = Module.load_package_classes(base_class, package_path)
-		except Exception as e:
-			cls.log_error(str(e))
-
-		if not classes:
-			cls.log_info(f'No classes found in `{package_path}` for `{base_class}`')
-		else:
-			for klass in classes.values():
-				registry.register(klass, origin)
+		# Add each .py file except __init__.py
+		for fname in os.listdir(package_path):
+			fpath = os.path.join(package_path, fname)
+			if os.path.isfile(fpath) and fname.endswith('.py') and fname != '__init__.py':
+				import_list.append({
+					'file': fpath,
+					'registry': registry,
+					'base_class': base_class,
+					'origin': origin
+				})
 
 		# Recurse into subfolders
 		for entry in os.listdir(package_path):
 			subdir = os.path.join(package_path, entry)
 			if os.path.isdir(subdir) and not entry.startswith('__'):
 				subreg = registry.subregistry(entry)
-				cls._register(subdir, subreg, base_class)
+				import_list.extend(cls._compile_import_file_list(subdir, subreg, base_class, origin))
+		return import_list
+
+	@classmethod
+	def _register(cls, package_path, registry, base_class, origin='wordwield'):
+		file_list = cls._compile_import_file_list(package_path, registry, base_class, origin)
+		remaining = list(file_list)
+		n_passes = 0
+
+		while remaining:
+			n_passes += 1
+			progress = False
+			for item in remaining[:]:
+				fpath = item['file']
+				reg = item['registry']
+				base = item['base_class']
+				orig = item['origin']
+				try:
+					print(f'[register] Pass {n_passes}: Registering {fpath}')
+					classes = Module.find_all_classes_by_base(base, fpath)
+					if classes:
+						for klass in classes:
+							reg.register(klass, orig)
+					remaining.remove(item)
+					progress = True
+				except Exception as e:
+					print(f'[register] Deferring {fpath} due to error: {e}')
+					remaining.remove(item)
+					remaining.append(item)
+			if not progress:
+				raise RuntimeError(f'Could not register some modules after {n_passes} passes: {remaining}')
 
 	@classmethod
 	def _init_db(cls, drop_existing=False):
@@ -160,8 +187,8 @@ class WordWield:
 	@classmethod
 	def log_error(cls, msg):
 		print(f"\033[91mERROR:\033[0m {msg}", flush=True)
-		exit(0)
-		# raise RuntimeError(msg)
+		# exit(0)
+		raise RuntimeError(msg)
 	
 	@classmethod
 	def log_warning(cls, msg):
@@ -199,3 +226,4 @@ class WordWield:
 			'expertise'      : cls.expertise.to_dict(), # Or cls.expertise.to_dict()
 			'test_items'     : ['foo', 'bar', 'baz']
 		}
+	

@@ -1,7 +1,8 @@
 from wordwield.lib import O, Operator
+from wordwield import ww
 
 
-class Narrative(Operator):
+class Narrative(ww.operators.Project):
 	def create(self, name):
 		# project = ProjectSchema(
 		# 	name   = name,
@@ -87,4 +88,7 @@ class Narrative(Operator):
 		# 	]
 		# ).save()
 		# return project
+		...
+
+	async def invoke(self):
 		...

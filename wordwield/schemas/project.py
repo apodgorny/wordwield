@@ -5,7 +5,12 @@ from typing import Optional
 from wordwield.lib.o import O
 
 
-class BeatSchema(O):
+class VariableSchema(O):
+	varname : str
+	streams : list[str]
+	length  : Optional[int] = None
+
+class GulpSchema(O):
 	timestamp : int = O.Field(description='Time of occurrence',       llm=False, semantic=True)
 	text      : str = O.Field(description='Content of the utterance', llm=True,  semantic=True)
 	
@@ -17,15 +22,10 @@ class BeatSchema(O):
 		data['timestamp'] = int(time())
 		return data
 
-class VariableSchema(O):
-	varname : str
-	streams : list[str]
-	length  : Optional[int] = None
-
 class StreamSchema(O):
-	name     : str              = O.Field(semantic=True, description='Thread name', llm=False)
-	triggers : str              = O.Field(semantic=True, description='Persona name who responds on writing', llm=False, default=None)
-	beats    : Optional[list[BeatSchema]] = O.Field(semantic=True, description='Ordered sequence of thoughts or utterances', default_factory=list, llm=False)
+	name     : str                        = O.Field(semantic=True, description='Thread name', llm=False)
+	triggers : str                        = O.Field(semantic=True, description='Persona name who responds on writing', llm=False, default=None)
+	gulps    : Optional[list[GulpSchema]] = O.Field(semantic=True, description='Ordered sequence of thoughts or utterances', default_factory=list, llm=False)
 
 	def to_list(self):
 		return [beat.text for beat in self.beats]
