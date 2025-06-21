@@ -1,94 +1,109 @@
 import os, inspect, sys
+from wordwield.lib import T
 
 
-class ExpertiseRegistry:
-	def __init__(self, folder):
-		self._folder = folder
-		self._items  = {}
-		self._load(folder)
+class RegistryItem:
+	def __init__(self, value, info=None):
+		self.value = value
+		self.info = info or {}
 
-	def _load(self, current):
-		for entry in os.listdir(current):
-			path = os.path.join(current, entry)
-			if os.path.isdir(path):
-				sub = ExpertiseRegistry(path)
-				setattr(self, entry, sub)
-				self._items[entry] = sub
-			elif entry.endswith('.md') or entry.endswith('.txt'):
-				name = os.path.splitext(entry)[0]
-				with open(path, 'r', encoding='utf-8') as f:
-					content = f.read()
-				setattr(self, name, content)
-				self._items[name] = content
+	def __str__(self):
+		return f'<RegistryItem {type(self.value).__name__}>'
 
-	def __getitem__(self, key):
-		return self._items[key]
+	def __repr__(self):
+		return str(self)
+	
+class TextRegistryItem(RegistryItem):
+	def __str__(self):
+		return f'<Text: {len(self.value.split("\n"))} lines>'
 
-	def all(self):
-		return self._items
+	def __repr__(self):
+		return str(self)
 
-	def to_dict(self):
-		result = {}
-		for k, v in self._items.items():
-			if isinstance(v, ExpertiseRegistry):
-				result[k] = v.to_dict()
-			else:
-				result[k] = f'{len(v)} chars'  # You may want to return content or True/False for existence, up to you
-		return result
+class ClassRegistryItem(RegistryItem):
+	def __str__(self):
+		tag = '(' + ','.join([v for k,v in self.info.items()]) + ')'
+		if hasattr(self.value, '__module__') and hasattr(self.value, '__qualname__'):
+			return f'{self.value.__module__}.{self.value.__qualname__}{tag}'
+		return str(type(self.value))
+
+	def __repr__(self):
+		return str(self)
 	
 
 class Registry:
-	def __init__(self, ww, namespace=''):
-		self._items     = {}  # name -> (cls, origin)
-		self._ww        = ww
-		self._namespace = namespace  # e.g. 'operators', 'operators.nlp'
+	def __init__(self, ns='', owner=None):
+		if owner:
+			if hasattr(owner, ns) and getattr(owner, ns) is not None:
+				raise RuntimeError(f'Could not attach registry `{ns}` to `{str(owner)}`. Attribute already exists and is not None.')
+			else:
+				setattr(owner, ns, self)
 
-	def register(self, cls, origin):
-		name = cls.__name__
-		self._items[name] = (cls, origin)
-		setattr(self, name, cls)
-		cls.ww = self._ww
-		cls.ns = self._namespace if self._namespace else name
-		cls.origin = origin  # optional, useful for reflection
-		return cls
+		self._items = {}
+		self._ns    = ns
 
 	def subregistry(self, name):
-		ns  = f'{self._namespace}.{name}' if self._namespace else name
-		reg = Registry(self._ww, ns)
-		setattr(self, name, reg)
+		ns = f'{self._ns}.{name}' if self._ns else name
+		reg = Registry(ns)
 		self._items[name] = reg
-		reg._namespace   = ns
+		reg._ns = ns
 		return reg
 
 	def __getitem__(self, name):
-		val = self._items[name]
-		if isinstance(val, tuple):
-			return val[0]
-		return val
-	
-	def __getattr__(self, name):
 		if name in self._items:
-			val = self._items[name]
-			if isinstance(val, tuple):
-				return val[0]
-			return val
-		print(self._items)
-		raise AttributeError(f'Registry `ww.{self._namespace}` has no item `{name}`')
+			if isinstance(self._items[name], Registry):
+				return self._items[name]
+			elif isinstance(self._items[name], RegistryItem):
+				return self._items[name].value
+			return self._items[name]
+		raise AttributeError(f'Registry `ww.{self._ns}` has no item `{name}`')
+	
+	def __setitem__(self, name, value):
+		self._items[name] = value
+		return self
+
+	def __getattr__(self, name):
+		return self[name]
+	
+	def __contains__(self, name):
+		return name in self._items
+	
+	def __iter__(self):
+		for key in self._items:
+			yield self[key]
+
+	def __str__(self):
+		return T(T.DATA, T.TREE, self.to_dict())
+
+	def get(self, name, default=None):
+		if name in self._items:
+			return self[name]
+		return default
 
 	def all(self):
-		return [v[0] if isinstance(v, tuple) else v for v in self._items.values()]
+		return [self[name] for name in self._items]
+	
+	def values(self):
+		for v in self:
+			yield v
+
+	def items(self):
+		for k in self._items:
+			yield k, self[k]
+
+	def keys(self):
+		for k in self._items:
+			yield k
+
+	def update(self, d):
+		for k in d:
+			self[k] = d[k]
 
 	def to_dict(self):
 		result = {}
-		for k, v in self._items.items():
-			if isinstance(v, Registry):
-				result[k] = v.to_dict()
-			elif isinstance(v, tuple):
-				cls, origin = v
-				tag = f' ({origin})' if origin else ''
-				result[k] = f'{cls.__module__}.{cls.__qualname__}{tag}'
-			elif hasattr(v, '__module__') and hasattr(v, '__qualname__'):
-				result[k] = f'{v.__module__}.{v.__qualname__}'
+		for k, item in self._items.items():
+			if isinstance(item, Registry):
+				result[k] = item.value.to_dict()
 			else:
-				result[k] = str(type(v))
+				result[k] = item
 		return result

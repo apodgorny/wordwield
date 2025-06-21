@@ -1,0 +1,7 @@
+guesser : 50
+guess_approver : Your guess is higher than the target. Try a number that is a bit lower.
+guesser : 40
+guess_approver : Your guess is lower than the target number. Try a number that is a bit higher.
+guesser : 45
+guess_approver : Your guess is higher than the target. Try a number that is a bit lower.
+guesser : 42

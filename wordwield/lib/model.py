@@ -36,7 +36,7 @@ class Model:
 		prompt          : str,
 		response_schema : O,
 
-		model_id        : str        = 'ollama::gemma3:4b',
+		model_id        : str,
 		role            : str        = 'user',
 		temperature     : float      = 0.0,
 		system          : str | None = None

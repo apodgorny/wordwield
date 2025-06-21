@@ -15,4 +15,4 @@ from .reserved          import is_reserved
 from .edge              import Edge
 from .record            import Record
 
-from .registry          import Registry, ExpertiseRegistry
+from .registry          import Registry, ClassRegistryItem, TextRegistryItem

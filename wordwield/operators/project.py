@@ -1,22 +1,40 @@
-from wordwield.lib import O
+from wordwield.lib import O, Registry
 from wordwield import ww
 
-from wordwield.schemas.project import (
-	ProjectSchema,
-	ExpertSchema,
-	StreamSchema,
-	VariableSchema,
-)
 
 class Project(ww.operators.Agent):
-	def __init__(self, name):
-		self.vars = {}
+	def __init__(self, name=None, schema: O = ww.schemas.ProjectSchema):
+		super().__init__(name=name, schema=schema)
+		Registry('agents',  self)
+		Registry('streams', self)
+		Registry('streams_by_role', self)
 
-	async def invoke(self, name, number):
-		project = ProjectSchema.load(name) or self.create(name)
-		if project:
-			await stream_write('source', number)
-			await expert(name=project.agents[0].name)
-			result = await stream_read('target')
-			return f'You guessed: {result}'
-		return 'No project'
+	async def init(self):
+		for agent_name in self.schema.agents:
+			agent_schema            = self.ww.schemas.AgentSchema.load(agent_name)
+			agent                   = agent_schema.to_operator()
+			agent.project           = self
+			agent.state['project']  = self
+			self.agents[agent_name] = agent
+
+		for stream_name in self.schema.streams:
+			stream_schema = self.ww.schemas.StreamSchema.load(stream_name)
+			self.streams[stream_name]                = stream_schema
+			self.streams_by_role[stream_schema.role] = stream_schema
+
+		print('Loaded streams:', list(self.streams.keys()))
+		
+	async def invoke(self):
+		since = 0.0
+		while True:
+			if prod_gulps := self.streams_by_role.prod_stream.read():
+				return prod_gulps
+			
+			await self.agents.manager()
+
+			if gulps := self.streams_by_role.invoke_stream.read(since = since):
+				since      = gulps[0].timestamp
+				agent_name = gulps[0].value
+				await self.agents[agent_name]()
+			else:
+				break

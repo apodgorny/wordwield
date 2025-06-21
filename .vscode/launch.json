@@ -2,14 +2,30 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "▶ Run narrative/main.py",
+			"name": "▶ Guessing Game",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/projects/narrative/main.py",
-			"cwd": "${workspaceFolder}/projects/narrative",
+			"program": "${workspaceFolder}/projects/guessing_game/main.py",
+			"cwd": "${workspaceFolder}/projects/guessing_game",
 			"python": "${config:python.defaultInterpreterPath}",
 			"console": "integratedTerminal",
 			"justMyCode": false,
+			"env": {
+				"PYTHONPATH": "${workspaceFolder}"
+			}
+		},
+		{
+			"name": "▶ WordWield Server",
+			"type": "python",
+			"request": "launch",
+			"module": "uvicorn",
+			"args": [
+				"web.server:app",
+				"--reload"
+			],
+			"cwd": "${workspaceFolder}",
+			"python": "${config:python.defaultInterpreterPath}",
+			"console": "integratedTerminal",
 			"env": {
 				"PYTHONPATH": "${workspaceFolder}"
 			}

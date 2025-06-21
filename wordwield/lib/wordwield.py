@@ -1,9 +1,8 @@
-import os, sys, asyncio
+import os, sys, asyncio, shutil
 from dotenv import dotenv_values
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from wordwield.lib.odb import ODB
 from wordwield.lib.record import Base
 
 from wordwield.lib import (
@@ -13,7 +12,8 @@ from wordwield.lib import (
 	T,
 	Model,
 	Registry,
-	ExpertiseRegistry
+	ClassRegistryItem,
+	TextRegistryItem
 )
 
 class WordWieldMeta(type):
@@ -23,16 +23,17 @@ class WordWieldMeta(type):
 class WordWield(metaclass=WordWieldMeta):
 	verbose        = True
 	is_initialized = False
-	config         = {}
 	operators      = None
 	schemas        = None
 	models         = None
 
 	@classmethod
 	def init(cls, PROJECT_NAME, PROJECT_PATH, reset_db=True):
-		cls.operators = Registry(cls, 'operators')
-		cls.schemas   = Registry(cls, 'schemas')
-		cls.models    = Registry(cls, 'models')
+		Registry('config',    cls)
+		Registry('operators', cls)
+		Registry('schemas',   cls)
+		Registry('models',    cls)
+		Registry('expertise', cls)
 
 		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)
 		cls._register_builtins()
@@ -42,7 +43,7 @@ class WordWield(metaclass=WordWieldMeta):
 
 		cls.is_initialized = True
 		cls.log_success(f"Project '{PROJECT_NAME}' initialized in '{PROJECT_PATH}'")
-		cls.log_success(T(T.DATA, T.TREE, cls.to_dict(), f'Project `{cls.config["PROJECT_NAME"]}`', color=True))
+		cls.log_success(T(T.DATA, T.TREE, cls.to_dict(), f'Project `{cls.config.PROJECT_NAME}`', color=True))
 
 	@classmethod
 	def _setup_paths(cls, PROJECT_NAME, PROJECT_PATH):
@@ -68,19 +69,22 @@ class WordWield(metaclass=WordWieldMeta):
 			abs_path = os.path.join(PROJECT_PATH, dir_name)
 			os.makedirs(abs_path, exist_ok=True)
 			cls.config[key] = abs_path
+		
+		shutil.rmtree(cls.config.LOGS_DIR)
+		os.makedirs(cls.config.LOGS_DIR, exist_ok=True)
 
 	@classmethod
 	def _register_builtins(cls):
-		cls._register(os.path.join(cls.config['WW_PATH'], 'operators'), cls.operators, Operator)
-		cls._register(os.path.join(cls.config['WW_PATH'], 'schemas'),   cls.schemas,   O)
-		cls._register(os.path.join(cls.config['WW_PATH'], 'models'),    cls.models,    Model)
+		cls._register_class(os.path.join(cls.config['WW_PATH'], 'schemas'),   cls.schemas,   O)
+		cls._register_class(os.path.join(cls.config['WW_PATH'], 'operators'), cls.operators, Operator)
+		cls._register_class(os.path.join(cls.config['WW_PATH'], 'models'),    cls.models,    Model)
 
 	@classmethod
 	def _register_project(cls):
-		cls._register(cls.config['OPERATORS_DIR'], cls.operators, Operator, cls.config['PROJECT_NAME'])
-		cls._register(cls.config['SCHEMAS_DIR'],   cls.schemas,   O,        cls.config['PROJECT_NAME'])
-		cls._register(cls.config['MODELS_DIR'],    cls.models,    Model,    cls.config['PROJECT_NAME'])
-		cls.expertise = ExpertiseRegistry(cls.config['EXPERTISE_DIR'])
+		cls._register_class(cls.config['SCHEMAS_DIR'],   cls.schemas,   O,        cls.config['PROJECT_NAME'])
+		cls._register_class(cls.config['OPERATORS_DIR'], cls.operators, Operator, cls.config['PROJECT_NAME'])
+		cls._register_class(cls.config['MODELS_DIR'],    cls.models,    Model,    cls.config['PROJECT_NAME'])
+		cls._register_expertise(cls.config['EXPERTISE_DIR'], cls.expertise)
 
 	@classmethod
 	def _compile_import_file_list(cls, package_path, registry, base_class, origin='wordwield'):
@@ -107,35 +111,50 @@ class WordWield(metaclass=WordWieldMeta):
 				subreg = registry.subregistry(entry)
 				import_list.extend(cls._compile_import_file_list(subdir, subreg, base_class, origin))
 		return import_list
+	
+	@classmethod
+	def _register_expertise(cls, path, reg):
+		for entry in os.listdir(path):
+			file_path = os.path.join(path, entry)
+			if os.path.isdir(file_path):
+				reg = reg.subregistry(entry)
+				cls._register_expertise(file_path, entry)
+			elif entry.endswith('.md') or entry.endswith('.txt'):
+				name = os.path.splitext(entry)[0]
+				with open(file_path, 'r', encoding='utf-8') as f:
+					content = f.read()
+				reg[os.path.splitext(entry)[0]] = TextRegistryItem(content)
 
 	@classmethod
-	def _register(cls, package_path, registry, base_class, origin='wordwield'):
+	def _register_class(cls, package_path, registry, base_class, origin='wordwield'):
 		file_list = cls._compile_import_file_list(package_path, registry, base_class, origin)
 		remaining = list(file_list)
 		n_passes = 0
 
 		while remaining:
+			error     = None
 			n_passes += 1
-			progress = False
+			progress  = False
 			for item in remaining[:]:
 				fpath = item['file']
-				reg = item['registry']
-				base = item['base_class']
-				orig = item['origin']
+				reg   = item['registry']
+				base  = item['base_class']
+				orig  = item['origin']
 				try:
 					print(f'[register] Pass {n_passes}: Registering {fpath}')
 					classes = Module.find_all_classes_by_base(base, fpath)
 					if classes:
 						for klass in classes:
-							reg.register(klass, orig)
+							klass.ww = cls
+							reg[klass.__name__] = ClassRegistryItem(klass, {'origin': orig})
 					remaining.remove(item)
 					progress = True
 				except Exception as e:
-					print(f'[register] Deferring {fpath} due to error: {e}')
+					error = e
 					remaining.remove(item)
 					remaining.append(item)
 			if not progress:
-				raise RuntimeError(f'Could not register some modules after {n_passes} passes: {remaining}')
+				raise error
 
 	@classmethod
 	def _init_db(cls, drop_existing=False):
@@ -157,7 +176,8 @@ class WordWield(metaclass=WordWieldMeta):
 
 		cls.engine = engine
 		cls.db     = session
-		ODB.session = session
+		O.enable_persistence(session)
+		O.enable_instantiation(cls.get_operator_class)
 
 		if drop_existing:
 			# --- Drop all tables, but do NOT remove the file ---
@@ -171,6 +191,26 @@ class WordWield(metaclass=WordWieldMeta):
 		# Recreate all tables from models
 		Base.metadata.create_all(bind=engine)
 		cls.log_success(f'Database initialized at {db_path}')
+
+	@classmethod
+	def get_operator_class(cls, path: str):
+		'''
+		Resolves operator class from registry path like:
+		'MyOperator' or 'operators.MyOperator' or 'operators.nlp.Summarizer'
+		'''
+		parts = path.split('.')
+		reg   = cls.operators
+
+		for part in parts[:-1]:
+			reg = reg.subregistry(part)
+
+		class_name = parts[-1]
+		operator_class = reg[class_name]
+
+		if not isinstance(operator_class, type):
+			raise RuntimeError(f'`{path}` did not resolve to a class (got: {type(operator_class)})')
+
+		return operator_class
 
 	@classmethod
 	def log(cls, msg, color=''):
@@ -199,7 +239,7 @@ class WordWield(metaclass=WordWieldMeta):
 		cls,
 		prompt,
 		schema,
-		model_id    = 'ollama::gemma3:4b',
+		model_id    = 'ollama::granite3.3:8b',
 		temperature = 0.0
 	):
 		return await Model.generate(
@@ -217,7 +257,7 @@ class WordWield(metaclass=WordWieldMeta):
 		When registries implement their own to_dict, this can delegate to them.
 		'''
 		return {
-			'config'         : dict(cls.config),
+			'config'         : cls.config.to_dict(),
 			'is_initialized' : cls.is_initialized,
 			'verbose'        : cls.verbose,
 			'operators'      : cls.operators.to_dict(), # Or cls.operators.to_dict() in the future

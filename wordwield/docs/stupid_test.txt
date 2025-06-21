@@ -1,0 +1,32 @@
+------------------------------
+PROMPT We are playing a guessing game, you are a manager in the game.
+Description of the game:
+----
+This is a guessing game where two agents are in a dialogue.
+Guesser guesses a number and guess_approver sees if a guess was correct and ends the game.
+If guess was not correct, guess_approver provides directions like "too low" or "too high" without giving away a correct number.
+Guesser reads corrections of guess_approver and tries to guess correct number in the minimal amount of steps.
+Guesser tries to use strategy to achieve correct guess in the minimal amount of steps.
+----
+Your objective is To choose the next agent to act, ensuring agents never act twice consecutively..
+Guess history in sequence top to bottom:
+-----------------------------------
+Agent : Agent's response
+-----------------------------------
+- guesser: "10"
+- guess_approver: "Too high"
+- guesser: "7"
+- guesser: "8"
+-----------------------------------
+The list of agent names – are your previous picks.
+If the last agent in the history was a guesser – pick guess_approver
+If the last agent in the history was guess_approver pick guesser
+Select the next agent to act, making sure the same agent never acts twice in a row.
+Agents:
+- "guesser" is to generate a guess based on previous guess results in a minimal number of steps.
+- "guess_approver" is to always respond to guessed number with directions for the next guess without giving away the correct number directly
+
+Put all data into JSON:
+{
+  "next_agent_name": str  # Agent name to be called next
+}

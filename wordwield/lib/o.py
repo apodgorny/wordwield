@@ -1,7 +1,7 @@
 import os, json, types
 from typing   import Any, get_args, get_origin, Union, List, Dict
 
-from pydantic import BaseModel, Field as PydanticField, model_validator
+from pydantic import BaseModel, Field as PydanticField, model_validator, ValidationError
 
 from .predicates import is_list, is_dict, unwrap_optional
 from .t          import T
@@ -10,8 +10,10 @@ from .odb        import ODB
 
 class O(BaseModel):
 	model_config = {
-		'extra': 'forbid',
-		'from_attributes': True
+		'extra'              : 'forbid',
+		'from_attributes'    : True,
+		'is_persistent'      : False,
+		'get_operator_class' : None
 	}
 
 	# Magic
@@ -23,7 +25,6 @@ class O(BaseModel):
 				raise KeyError(f'Attribute `{k}` is reserved. Use `{self.__class__.__name__}.load({k})` instead')
 
 		super().__init__(**kwargs)
-		self.__db__ = ODB(self)
 
 	def __getattr__(self, name: str):
 		if name in self.model_fields:
@@ -48,6 +49,15 @@ class O(BaseModel):
 	def _before_validate(cls, data):
 		ValidationError.last_model = cls.__name__
 		return cls.on_create(data)
+	
+	@classmethod
+	def enable_persistence(cls, session):
+		ODB.session = session
+		O.model_config['is_persistent'] = True
+
+	@classmethod
+	def enable_instantiation(cls, get_operator_class):
+		O.model_config['get_operator_class'] = get_operator_class
 
 	@classmethod
 	def on_create(cls, data):
@@ -67,6 +77,10 @@ class O(BaseModel):
 				kwargs.pop(k)
 
 		return PydanticField(*args, json_schema_extra=extra, **kwargs)
+	
+	@classmethod
+	def has_field(cls, field: str) -> bool:
+		return field in cls.model_fields
 
 	@classmethod
 	def is_o_type(cls, tp: Any) -> bool:
@@ -149,13 +163,24 @@ class O(BaseModel):
 		FalseSchema = make_schema('False', false_fields)
 		return TrueSchema, FalseSchema
 	
+	@classmethod
+	def assert_instanceable(cls):
+		if not 'get_operator_class' in O.model_config:
+			raise RuntimeError(f'Could not create operator. Type `O` does not have instantiation enabled')
+		if not cls.has_field('name'):
+			raise RuntimeError(f'Could not create operator. Class `{cls.__name__}` does not have attribute `name`')
+		if not cls.has_field('class_name'):
+			raise RuntimeError(f'Could not create operator. Class `{cls.__name__}` does not have attribute `class_name`')
+	
 	# Getters
 	############################################################################
 
 	@property
 	def db(self):
-		return self.__db__
-
+		if O.model_config['is_persistent']:
+			return ODB(self)
+		raise RuntimeError(f'Could not connect to session: persistence is not enabled in `O`')
+	
 	@property
 	def id(self):
 		return self.__dict__.get('__id__')
@@ -168,6 +193,10 @@ class O(BaseModel):
 	def to_dict(self, r=False, e=False) -> dict : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
 	def to_tree(self)                   -> str  : return T(T.PYDANTIC, T.TREE, self)
 	def unpack(self)                            : return T(T.PYDANTIC, T.ARGUMENTS, self)
+
+	def to_operator(self):
+		self.assert_instanceable()
+		return O.model_config['get_operator_class'](self.class_name)(self.name, self)
 
 	def to_semantic_hint(self) -> str:
 		data   = T(T.PYDANTIC, T.DATA, self)
