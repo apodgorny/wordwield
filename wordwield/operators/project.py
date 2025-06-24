@@ -7,7 +7,6 @@ class Project(ww.operators.Agent):
 		super().__init__(name=name, schema=schema)
 		Registry('agents',  self)
 		Registry('streams', self)
-		Registry('streams_by_role', self)
 
 	async def init(self):
 		for agent_name in self.schema.agents:
@@ -16,11 +15,15 @@ class Project(ww.operators.Agent):
 			agent.project           = self
 			agent.state['project']  = self
 			self.agents[agent_name] = agent
+			Registry('streams_by_role', agent)
 
 		for stream_name in self.schema.streams:
 			stream_schema = self.ww.schemas.StreamSchema.load(stream_name)
-			self.streams[stream_name]                = stream_schema
-			self.streams_by_role[stream_schema.role] = stream_schema
+			self.streams[stream_name] = stream_schema
+			agent = self.agents[stream_schema.author]
+			agent.streams_by_role[stream_schema.role] = stream_schema
+
+		
 
 		print('Loaded streams:', list(self.streams.keys()))
 		

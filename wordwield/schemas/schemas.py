@@ -10,7 +10,7 @@ class ProjectSchema(O):
 	name            : str
 	intent          : str             # description of what project must accomplish
 	description     : str             # description of the project
-	manager         : str             # name of manager agent
+	manager         : str = None      # name of manager agent
 	agents          : list[str]       # names of agents
 	streams         : list[str]       # names of streams
 
@@ -19,7 +19,7 @@ class AgentSchema(O):
 	class_name      : str             # like "CriticAgent"
 	intent          : str             # purpose, semantic role in project
 	template        : str             # jinja prompt template
-	response_schema : str
+	response_schema : str = None
 
 class GulpSchema(O):
 	timestamp : int           = O.Field(description='Time of occurrence', llm=False, semantic=True)

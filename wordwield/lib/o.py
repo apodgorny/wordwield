@@ -1,14 +1,79 @@
 import os, json, types
-from typing   import Any, get_args, get_origin, Union, List, Dict
 
-from pydantic import BaseModel, Field as PydanticField, model_validator, ValidationError
+from typing                                 import Any, get_args, get_origin, Union, List, Dict
 
-from .predicates import is_list, is_dict, unwrap_optional
-from .t          import T
-from .odb        import ODB
+from pydantic                               import BaseModel, Field as PydanticField, model_validator, ValidationError
+from pydantic.fields                        import FieldInfo
+from pydantic_core                          import PydanticUndefined
+from pydantic._internal._model_construction import ModelMetaclass
+
+from .predicates                            import is_list, is_dict, unwrap_optional
+from .t                                     import T
+from .odb                                   import ODB
 
 
-class O(BaseModel):
+################################################################################################################
+# class OField
+################################################################################################################
+
+
+class OField(FieldInfo):
+	def __init__(self, *args, description='', **kwargs):
+		extra = kwargs.pop('json_schema_extra', {}) or {}
+		if description:
+			extra['description']  = description
+			kwargs['description'] = description
+
+		# Clean kwargs just like you did before
+		for k in list(kwargs):
+			if not (isinstance(kwargs[k], type) or isinstance(kwargs[k], types.FunctionType)):
+				extra[k] = kwargs[k]
+			if k not in ['default', 'default_factory', 'description']:
+				kwargs.pop(k)
+
+		super().__init__(*args, json_schema_extra=extra, **kwargs)
+
+	@property
+	def extra(self):
+		return self.json_schema_extra or {}
+	
+	def get_default(self):
+		return self.default if self.default is not None else (self.default_factory if self.default_factory is not None else ...)
+
+
+################################################################################################################
+# class OMeta
+################################################################################################################
+
+
+class OMeta(ModelMetaclass):
+	def __str__(cls):
+		items = []
+		for name, field in cls.model_fields.items():
+			t        = field.annotation
+			tname    = t.__name__                               if hasattr(t, '__name__')                     else str(t)
+			default  = f'default={repr(field.default)}'         if field.default     is not PydanticUndefined else ''
+			descr    = f'description={repr(field.description)}' if field.description is not None              else ''
+			fattrs   = ', '.join([v for v in [default, descr] if v])
+			def_part = f'= O.Field({fattrs})' if fattrs else ''
+
+			items.append((name, tname, def_part))
+
+		name_width = max(len(name)  for name, _, _  in items)
+		type_width = max(len(tname) for _, tname, _ in items)
+
+		lines = [f'class {cls.__name__}(O):']
+		for name, tname, def_part in items:
+			lines.append(f'    {name.ljust(name_width)} : {tname.ljust(type_width)}{def_part}')
+		return '\n'.join(lines) + '\n'
+
+
+################################################################################################################
+# class O
+################################################################################################################
+
+
+class O(BaseModel, metaclass=OMeta):
 	model_config = {
 		'extra'              : 'forbid',
 		'from_attributes'    : True,
@@ -34,6 +99,16 @@ class O(BaseModel):
 		if not related:
 			raise AttributeError(f'{self.__class__.__name__} has no attribute or edge `{name}`')
 		return related
+	
+	def __getitem__(self, key):
+		if key in self.model_fields:
+			return getattr(self, key)
+		raise KeyError(key)
+
+	def __setitem__(self, key, value):
+		if key in self.model_fields:
+			return setattr(self, key, value)
+		raise KeyError(key)
 
 	def __str__(self) -> str:
 		return T(T.PYDANTIC, T.STRING, self)
@@ -62,22 +137,11 @@ class O(BaseModel):
 	@classmethod
 	def on_create(cls, data):
 		return data
-
-	@classmethod
-	def Field(cls, *args, description='', **kwargs):
-		extra = kwargs.pop('json_schema_extra', {}) or {}
-		if description:
-			extra['description']  = description
-			kwargs['description'] = description
-
-		for k in list(kwargs):
-			if not (isinstance(kwargs[k], type) or isinstance(kwargs[k], types.FunctionType)):
-				extra[k] = kwargs[k]
-			if k not in ['default', 'default_factory', 'description']:
-				kwargs.pop(k)
-
-		return PydanticField(*args, json_schema_extra=extra, **kwargs)
 	
+	@classmethod
+	def Field(cls, *args, **kwargs):
+		return OField(*args, **kwargs)
+
 	@classmethod
 	def has_field(cls, field: str) -> bool:
 		return field in cls.model_fields
@@ -117,12 +181,35 @@ class O(BaseModel):
 		return T(T.PYDANTIC, T.PROMPT, cls)
 
 	@classmethod
-	def to_schema(cls) -> dict:
+	def to_jsonschema(cls) -> dict:
 		return T(T.PYDANTIC, T.DEREFERENCED_JSONSCHEMA, cls)
-
+	
 	@classmethod
 	def load(cls, ref: int | str) -> 'O':
 		return ODB.load(ref, cls)
+	
+	@classmethod
+	def loader(cls, name):
+		class Loader:
+			def __init__(self, name, outer_cls):
+				self.name = name
+				self.cls  = outer_cls
+			def __call__(self):
+				return self.cls.load(self.name)
+		return Loader(name, cls)
+	
+	@classmethod
+	def create_or_update(cls, name, **kwargs) -> 'O':
+		obj = None
+		if cls.exists(name):
+			obj = cls.load(name)
+			for k, v in kwargs.items():
+				if k != 'id':
+					setattr(obj, k, v)
+		else:
+			obj = cls(name=name, **kwargs)
+		obj.save()
+		return obj
 	
 	@classmethod
 	def pack(cls, args):
@@ -132,29 +219,29 @@ class O(BaseModel):
 	def split(cls, by: str):
 		'''
 			Splits the schema into two:
-			- MySchema__True: fields where json_schema_extra[by] is True or missing
-			- MySchema__False: fields where json_schema_extra[by] is explicitly False
+			- MySchema__True  : fields where json_schema_extra[by] is True or missing
+			- MySchema__False : fields where json_schema_extra[by] is explicitly False
 			Returns (MySchema__True, MySchema__False)
 		'''
 		true_fields  = {}
 		false_fields = {}
 		for name, field in cls.model_fields.items():
-			info         = field.json_schema_extra or {}
-			flag         = info.get(by, True)
+			extra        = field.extra
+			flag         = by(name, field) if callable(by) else extra.get(by, True)
 			target       = false_fields if flag is False else true_fields
-			desc         = info.get('description', None)
-			extras       = dict(info)
-			field_kwargs = dict(description=desc, json_schema_extra=extras)
-			default      = field.default if field.default is not None else ...
+			desc         = extra.get('description', None)
+			field_kwargs = dict(description=desc, json_schema_extra=extra)
+			default      = field.get_default()
 			target[name] = (field.annotation, default, field_kwargs)
 
 		def make_schema(suffix, fields):
 			annotations = {}
-			namespace = {}
+			namespace   = {}
 
 			for k, (ann, default, field_kwargs) in fields.items():
+				if default is PydanticUndefined: default = None
 				annotations[k] = ann
-				namespace[k]   = PydanticField(default, **field_kwargs)
+				namespace[k]   = OField(default=default, **field_kwargs)
 
 			namespace['__annotations__'] = annotations
 			return type(f'{cls.__name__}__{suffix}', (O,), namespace)
@@ -171,6 +258,10 @@ class O(BaseModel):
 			raise RuntimeError(f'Could not create operator. Class `{cls.__name__}` does not have attribute `name`')
 		if not cls.has_field('class_name'):
 			raise RuntimeError(f'Could not create operator. Class `{cls.__name__}` does not have attribute `class_name`')
+		
+	@classmethod
+	def exists(cls, name) -> bool:
+		return ODB.exists(cls, name)
 	
 	# Getters
 	############################################################################
@@ -192,6 +283,7 @@ class O(BaseModel):
 	def to_json(self, r=False)          -> str  : return json.dumps(self.to_dict(r, e=True), indent=4, ensure_ascii=False)
 	def to_dict(self, r=False, e=False) -> dict : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
 	def to_tree(self)                   -> str  : return T(T.PYDANTIC, T.TREE, self)
+	def to_schema(self)                 -> type : return self.__class__
 	def unpack(self)                            : return T(T.PYDANTIC, T.ARGUMENTS, self)
 
 	def to_operator(self):
@@ -216,7 +308,6 @@ class O(BaseModel):
 		return self.__class__(**data)
 
 	def save(self):
-		# print('SAVING', self)
 		self.db.save()
 		return self
 
@@ -226,6 +317,11 @@ class O(BaseModel):
 	def get_description(self, field: str) -> str:
 		info = self.model_fields.get(field)
 		return info.description or ''
+	
+	def iter(self):
+		for name, field in self.model_fields.items():
+			value = getattr(self, name, None)
+			yield name, value, field
 	
 	def iter_nested(self):
 		'''
@@ -248,7 +344,9 @@ class O(BaseModel):
 					yield (k, item)
 
 
-##################################################################################
+################################################################################################################
+# ValidationError
+################################################################################################################
 
 
 from pydantic import ValidationError

@@ -2,11 +2,11 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "▶ Guessing Game",
+			"name": "▶ Narrative",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/projects/guessing_game/main.py",
-			"cwd": "${workspaceFolder}/projects/guessing_game",
+			"program": "${workspaceFolder}/projects/narrative/main.py",
+			"cwd": "${workspaceFolder}/projects/narrative",
 			"python": "${config:python.defaultInterpreterPath}",
 			"console": "integratedTerminal",
 			"justMyCode": false,

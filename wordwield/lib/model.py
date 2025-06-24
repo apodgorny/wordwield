@@ -49,7 +49,7 @@ class Model:
 			model  = Model.load(model_id, ww.models)
 			result = await model(
 				prompt          = prompt,
-				response_schema = response_schema.to_schema(),
+				response_schema = response_schema.to_jsonschema(),
 				role            = role,
 				temperature     = temperature,
 				system          = system

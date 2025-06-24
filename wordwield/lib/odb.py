@@ -1,5 +1,6 @@
-from sqlalchemy          import inspect
-from sqlalchemy.orm      import Session
+from sqlalchemy                import inspect
+from sqlalchemy.orm            import Session
+from sqlalchemy.exc            import IntegrityError
 
 from typing                    import get_origin, List, Dict
 from wordwield.lib.predicates  import is_list, is_dict
@@ -58,6 +59,12 @@ class ODB:
 				name = name,
 			).first()
 		return orm_obj
+	
+	@classmethod
+	def exists(cls, schema, name):
+		orm_class  = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, schema)
+		if not inspect(cls.session.bind).has_table(orm_class.__tablename__): return False
+		return bool(ODB.session.query(orm_class).filter_by(name=name).first() is not None)
 
 	@classmethod
 	def _load_by_id(cls, id, orm_class):
@@ -125,15 +132,6 @@ class ODB:
 			if hasattr(child, 'db'):
 				child.db._load_edges(seen)
 
-	# def _save_edges(self):
-	# 	o = self._o
-	# 	s = self.session
-
-	# 	for name, field in o.model_fields.items():
-	# 		reverse = field.json_schema_extra.get('reverse') if field.json_schema_extra else None
-	# 		for key, child in o.iter_nested():
-	# 			self._save_edge(src=o, tgt=child, rel1=name, rel2=reverse, key1=key)
-
 	def _save_edges(self):
 		o = self._o
 		for name, field in o.model_fields.items():
@@ -181,7 +179,6 @@ class ODB:
 	def get(self, id)       : return self._o_or_none(self.session.get(self._orm_class, id))
 	def first(self)         : return self._o_or_none(self.query().first())
 	def count(self)         : return self.query().count()
-	def exists(self)        : return self.query().exists().scalar()
 	def all(self)           : return [r for r in self.query().all() if isinstance(r, self._orm_class)]
 	def refresh(self)       : self.session.refresh(self._o)
 	def expunge(self)       : self.session.expunge(self._o)
@@ -200,17 +197,23 @@ class ODB:
 		for _, child in self._o.iter_nested():
 			child.save()
 
-		if obj_id:
-			record = self.session.get(self._orm_class, obj_id)
-			if not record:
-				raise ValueError(f'Record with id={obj_id} not found in table `{self._orm_class.__tablename__}`')
-			for key, value in data.items():
-				setattr(record, key, value)
-		else:
-			record = self._orm_class(**data)
-			self.session.add(record)
+		try:
+			if obj_id:
+				record = self.session.get(self._orm_class, obj_id)
+				if not record:
+					raise ValueError(f'Record with id={obj_id} not found in table `{self._orm_class.__tablename__}`')
+				for key, value in data.items():
+					setattr(record, key, value)
+			else:
+				record = self._orm_class(**data)
+				self.session.add(record)
 
-		self.commit()
+			self.commit()
+
+		except IntegrityError as e:
+			msg = str(e).split('[')[0]
+			raise RuntimeError(f'In `{self._o.__class__.__name__}`: {msg}while trying to save:\n\n{self._o}') from None
+
 		setattr(self._o, '__id__', getattr(record, 'id', None))
 		self._save_edges()
 		self.commit()
@@ -231,6 +234,8 @@ class ODB:
 
 		self.commit()
 		self._is_deleted = True
+		if hasattr(self._o, '__id__'):
+			delattr(self._o, '__id__')
 
 	def get_related(self, name: str):
 		o      = self._o

@@ -60,10 +60,18 @@ class Registry:
 	
 	def __setitem__(self, name, value):
 		self._items[name] = value
-		return self
+		return value
 
 	def __getattr__(self, name):
+		if name.startswith('_'):
+			raise AttributeError(name)
 		return self[name]
+
+	def __setattr__(self, name, value):
+		if name.startswith('_'):
+			object.__setattr__(self, name, value)
+		else:
+			self[name] = value
 	
 	def __contains__(self, name):
 		return name in self._items

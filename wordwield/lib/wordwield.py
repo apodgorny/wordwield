@@ -1,4 +1,4 @@
-import os, sys, asyncio, shutil
+import os, sys, asyncio, shutil, yaml
 from dotenv import dotenv_values
 
 from sqlalchemy import create_engine
@@ -239,7 +239,7 @@ class WordWield(metaclass=WordWieldMeta):
 		cls,
 		prompt,
 		schema,
-		model_id    = 'ollama::granite3.3:8b',
+		model_id    = 'ollama::gemma3:4b',
 		temperature = 0.0
 	):
 		return await Model.generate(
@@ -266,4 +266,48 @@ class WordWield(metaclass=WordWieldMeta):
 			'expertise'      : cls.expertise.to_dict(), # Or cls.expertise.to_dict()
 			'test_items'     : ['foo', 'bar', 'baz']
 		}
+	
+	##########################################################################
+
+	@classmethod
+	def from_yaml(cls, path):
+		with open(path, 'r') as f:
+			cfg = yaml.safe_load(f)
+
+		project = cfg['project']
+		streams = project.get('streams', [])
+		agents  = project.get('agents',  [])
+
+		# Collect names for lists
+		stream_names = [s['name'] for s in streams]
+		agent_names  = [a['name'] for a in agents]
+
+		# Save ProjectSchema
+		cls.schemas.ProjectSchema(
+			name        = project['name'],
+			intent      = project['intent'],
+			description = project.get('description', ''),
+			manager     = project.get('manager', agent_names[0]),
+			agents      = agent_names,
+			streams     = stream_names,
+		).save()
+
+		# Save StreamSchemas
+		for stream in streams:
+			cls.schemas.StreamSchema(
+				name   = stream['name'],
+				role   = stream['role'],
+				author = stream['author']
+			).save()
+
+		# Save AgentSchemas
+		for agent in agents:
+			cls.schemas.AgentSchema(
+				name            = agent['name'],
+				class_name      = agent['class_name'],
+				intent          = agent['intent'],
+				response_schema = agent['response_schema'],
+				template        = agent['template'],
+			).save()
+
 	

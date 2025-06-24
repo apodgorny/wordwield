@@ -26,7 +26,8 @@ class Agent(Operator):
 
 		if self.schema is not None:
 			if self.schema.has_field('response_schema'):
-				self.response_schema = self.ww.schemas[self.schema.response_schema]
+				if self.response_schema is not None:
+					self.response_schema = self.ww.schemas[self.schema.response_schema]
 			self.to_state(self.schema)
 
 	async def __call__(self, *args, **kwargs):
@@ -49,15 +50,17 @@ class Agent(Operator):
 
 	def to_state(self, *args, **kwargs):
 		for obj in args:
-			if hasattr(obj, 'to_dict'):
+			if O.is_o_instance(obj):
 				obj = obj.to_dict()
 			if isinstance(obj, dict):
 				self.state.update(obj)
 			else:
-				raise ValueError(f'Object {obj} is not a dict or does not have to_dict()')
+				# raise ValueError(f'Object `{obj}({type(obj)})` is not a dict or does not have to_dict() in agent `{self.name}`')
+				...
 		self.state.update(kwargs)
 	
-	def fill(self, template: str, **vars) -> str:
+	def fill(self, template: str = None, **vars) -> str:
+		template = template or self.schema.template
 		try:
 			template  = String.unindent(template)
 			all_vars  = {**self.state.to_dict(), **vars}

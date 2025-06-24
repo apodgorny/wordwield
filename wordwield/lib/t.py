@@ -87,7 +87,7 @@ def model_to_string(obj, base_level=0):
 	return re.sub(':[ ]+', ': ', result)
 
 @T.register(T.PYDANTIC, T.JSONSCHEMA)
-def model_to_schema(model: type[BaseModel]) -> dict:
+def model_to_jsonschema(model: type[BaseModel]) -> dict:
 	return model.model_json_schema()
 
 
