@@ -7,14 +7,8 @@ from .o import O
 class Operator:
 	ww = None
 
-	def __init__(self, name=None, schema:O=None):
-		self.name   = name
-		self.schema = schema
-		if schema is not None and name is not None:
-			if O.is_o_type(schema):
-				self.schema = schema.load(name)
-			elif not O.is_o_instance(schema):
-				raise TypeError(f'Invalid schema type: expected O class or instance, got {type(schema)}')
+	def __init__(self, name=None):
+		self.name = name
 
 	async def __call__(self, *args, **kwargs):
 		await self.init()

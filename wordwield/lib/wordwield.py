@@ -88,8 +88,9 @@ class WordWield(metaclass=WordWieldMeta):
 
 	@classmethod
 	def _compile_import_file_list(cls, package_path, registry, base_class, origin='wordwield'):
-		import_list = []
+		import_list  = []
 		package_path = os.path.abspath(package_path)
+
 		if not os.path.isdir(package_path):
 			return []
 
@@ -98,10 +99,10 @@ class WordWield(metaclass=WordWieldMeta):
 			fpath = os.path.join(package_path, fname)
 			if os.path.isfile(fpath) and fname.endswith('.py') and fname != '__init__.py':
 				import_list.append({
-					'file': fpath,
-					'registry': registry,
-					'base_class': base_class,
-					'origin': origin
+					'file'       : fpath,
+					'registry'   : registry,
+					'base_class' : base_class,
+					'origin'     : origin
 				})
 
 		# Recurse into subfolders

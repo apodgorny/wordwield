@@ -35,7 +35,7 @@ class Registry:
 	def __init__(self, ns='', owner=None):
 		if owner:
 			if hasattr(owner, ns) and getattr(owner, ns) is not None:
-				raise RuntimeError(f'Could not attach registry `{ns}` to `{str(owner)}`. Attribute already exists and is not None.')
+				raise RuntimeError(f'Could not attach registry `{ns}` to `{str(owner)}`. Attribute `{ns}` already exists and is not None.')
 			else:
 				setattr(owner, ns, self)
 

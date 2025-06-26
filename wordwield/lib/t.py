@@ -3,7 +3,7 @@ from typing import Any, get_args, get_origin, Union, List, Dict
 
 from pydantic        import BaseModel, create_model
 from pydantic.fields import FieldInfo
-from sqlalchemy      import Table, Column, MetaData, Integer, String, JSON
+from sqlalchemy      import Table, Column, MetaData, Integer, String, JSON, text
 from sqlalchemy.orm  import declarative_base
 
 from .predicates  import is_atomic_dict, is_atomic_list, is_pydantic, is_pydantic_class, is_excluded_type, is_atomic
@@ -249,8 +249,11 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 					sql_type = JSON
 				elif ftype is int:
 					sql_type = Integer
-				elif ftype is str:
-					sql_type = String
+				elif ftype is bool:
+					sql_type = Integer
+					column_kwargs['nullable'] = False
+					column_kwargs['default']  = 0
+					column_kwargs['server_default'] = text('0')
 				elif ftype is dict:
 					sql_type = JSON
 				else:

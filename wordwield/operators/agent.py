@@ -1,4 +1,4 @@
-import os, re, json, inspect
+import inspect
 
 from jinja2 import Environment, BaseLoader
 
@@ -9,26 +9,20 @@ from wordwield.lib import (
 	O
 )
 
-from wordwield.schemas.schemas import (
-	AgentSchema
-)
+from wordwield.lib.predicates import *
 
 
 class Agent(Operator):
-	response_schema = None
+	ResponseSchema  : O   = None
+	intent          : str = None      # purpose, semantic role in project
+	template        : str = None      # jinja prompt template
 
 	# Magic
 	######################################################################
 
-	def __init__(self, name=None, schema: O = AgentSchema):
-		super().__init__(name=name, schema=schema)
+	def __init__(self, name=None):
+		super().__init__(name=name)
 		Registry('state', self)
-
-		if self.schema is not None:
-			if self.schema.has_field('response_schema'):
-				if self.response_schema is not None:
-					self.response_schema = self.ww.schemas[self.schema.response_schema]
-			self.to_state(self.schema)
 
 	async def __call__(self, *args, **kwargs):
 		self.to_state(*args, **kwargs)
@@ -42,9 +36,14 @@ class Agent(Operator):
 	async def _collect_props(self, state=None):
 		state = state or self.state
 		for name in dir(self.__class__):
-			if isinstance(getattr(self.__class__, name), property) and not name.startswith('__'):
-				prop = getattr(self, name)
-				state[name] = await prop if inspect.isawaitable(prop) else prop
+			if name.startswith('__'):
+				prop = getattr(self.__class__, name)
+				if isinstance(prop, property):
+					prop = getattr(self, name)
+					state[name] = await prop if inspect.isawaitable(prop) else prop
+				elif is_atomic(prop):
+					state[name] = prop
+
 	# Public
 	######################################################################
 
@@ -60,7 +59,7 @@ class Agent(Operator):
 		self.state.update(kwargs)
 	
 	def fill(self, template: str = None, **vars) -> str:
-		template = template or self.schema.template
+		template = template or self.template
 		try:
 			template  = String.unindent(template)
 			all_vars  = {**self.state.to_dict(), **vars}
@@ -71,8 +70,8 @@ class Agent(Operator):
 			raise ValueError(f'Could not fill template in agent `{self.name}`: {str(e)}')
 		return prompt
 
-	async def ask(self, prompt='', schema=None, **extra_fields):
-		schema                     = schema or self.response_schema
+	async def ask(self, prompt='', schema=None, unpack=True, **extra_fields):
+		schema                     = schema or self.ResponseSchema
 		llm_schema, non_llm_schema = schema.split('llm')
 		prompt                    += '\n\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
 
@@ -82,7 +81,7 @@ class Agent(Operator):
 		)
 		full = schema(**{**partial, **extra_fields})
 		self.to_state(full)
-		return full.unpack()
+		return full.unpack() if unpack else full.to_dict()
 
 	######################################################################
 

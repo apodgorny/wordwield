@@ -258,6 +258,11 @@ class ODB:
 		if is_dict(tp):
 			return {} if not result else {k: v for k, v in result}
 		elif result:
-			return result[0]
+			if tp == bool:
+				v = result[0]
+				if v in (0, '0', False, 'false', 'False', '', None):
+					return False
+				return True
+			return tp(result[0])
 		else:
-			return None
+			return field.default if field.default is not None else None

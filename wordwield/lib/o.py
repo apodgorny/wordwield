@@ -7,7 +7,7 @@ from pydantic.fields                        import FieldInfo
 from pydantic_core                          import PydanticUndefined
 from pydantic._internal._model_construction import ModelMetaclass
 
-from .predicates                            import is_list, is_dict, unwrap_optional
+from .predicates                            import is_list, is_dict, unwrap_optional, is_annotation
 from .t                                     import T
 from .odb                                   import ODB
 
@@ -16,7 +16,6 @@ from .odb                                   import ODB
 # class OField
 ################################################################################################################
 
-
 class OField(FieldInfo):
 	def __init__(self, *args, description='', **kwargs):
 		extra = kwargs.pop('json_schema_extra', {}) or {}
@@ -24,18 +23,27 @@ class OField(FieldInfo):
 			extra['description']  = description
 			kwargs['description'] = description
 
-		# Clean kwargs just like you did before
-		for k in list(kwargs):
-			if not (isinstance(kwargs[k], type) or isinstance(kwargs[k], types.FunctionType)):
-				extra[k] = kwargs[k]
+		if args:
+			if is_annotation(args[0]):
+				args = list(args)
+				self._type = args.pop()
+		if args:
+			raise RuntimeError(f'OField: Unexpected positional args: {args}')
+
+		for k, v in dict(kwargs).items():
+			if not (isinstance(v, type) or isinstance(v, types.FunctionType)):
+				extra[k] = v
 			if k not in ['default', 'default_factory', 'description']:
 				kwargs.pop(k)
 
-		super().__init__(*args, json_schema_extra=extra, **kwargs)
+		super().__init__(json_schema_extra=extra, **kwargs)
 
 	@property
 	def extra(self):
 		return self.json_schema_extra or {}
+	
+	def get_type(self):
+		return getattr(self, '_type', None)
 	
 	def get_default(self):
 		return self.default if self.default is not None else (self.default_factory if self.default_factory is not None else ...)
@@ -47,6 +55,14 @@ class OField(FieldInfo):
 
 
 class OMeta(ModelMetaclass):
+	def __new__(mcs, name, bases, namespace, **kwargs):
+		annotations = dict(namespace.get('__annotations__', {}))
+		for fname, field in namespace.items():
+			if isinstance(field, OField) and 'type' in field.extra:
+				annotations[fname] = field.extra['type']
+		namespace['__annotations__'] = annotations
+		return super().__new__(mcs, name, bases, namespace, **kwargs)
+	
 	def __str__(cls):
 		items = []
 		for name, field in cls.model_fields.items():
@@ -59,8 +75,8 @@ class OMeta(ModelMetaclass):
 
 			items.append((name, tname, def_part))
 
-		name_width = max(len(name)  for name, _, _  in items)
-		type_width = max(len(tname) for _, tname, _ in items)
+			name_width = max(len(name)  for name, _, _  in items)
+			type_width = max(len(tname) for _, tname, _ in items)
 
 		lines = [f'class {cls.__name__}(O):']
 		for name, tname, def_part in items:
@@ -199,16 +215,16 @@ class O(BaseModel, metaclass=OMeta):
 		return Loader(name, cls)
 	
 	@classmethod
-	def create_or_update(cls, name, **kwargs) -> 'O':
-		obj = None
+	def get(cls, name) -> 'O':
+		return cls.put(name)
+	
+	@classmethod
+	def put(cls, name, **kwargs):
 		if cls.exists(name):
 			obj = cls.load(name)
-			for k, v in kwargs.items():
-				if k != 'id':
-					setattr(obj, k, v)
 		else:
 			obj = cls(name=name, **kwargs)
-		obj.save()
+		obj.set(**kwargs) # call the instance method!
 		return obj
 	
 	@classmethod
@@ -263,6 +279,51 @@ class O(BaseModel, metaclass=OMeta):
 	def exists(cls, name) -> bool:
 		return ODB.exists(cls, name)
 	
+	@classmethod
+	def schema(cls, *args, **fields):
+		"""
+			Dynamically create a new schema class inheriting from O.
+			Usage:
+				MySchema = O.schema(
+					'MySchema',           # <- (опционально) имя схемы
+					name = O.Field(str, default=''),
+					age  = O.Field(int, default=0),
+					title = str,
+				)
+				или без имени:
+				MySchema = O.schema(
+					title = str,
+					...
+				)
+		"""
+		annotations = {}
+		namespace   = {}
+		schema_name = 'AnonymousSchema'
+
+		if args:
+			if len(args) == 1 and isinstance(args[0], str):
+				schema_name = args[0]
+			else:
+				raise TypeError('First and only arg to O.schema() must be schema name (str) if provided.')
+
+		for fname, value in fields.items():
+			if isinstance(value, OField):
+				tp = value.get_type()
+				if tp is None:
+					raise ValueError(f'O.Field for `{fname}` must specify a type as first argument')
+				annotations[fname] = tp
+				namespace[fname]   = value
+			elif is_annotation(value):
+				annotations[fname] = value
+				namespace[fname]   = O.Field(value)
+			else:
+				raise TypeError(
+					f'Value for field `{fname}` must be O.Field(type, ...), or type/generic, got {type(value).__name__}'
+				)
+		namespace['__annotations__'] = annotations
+		return type(schema_name, (cls,), namespace)
+
+	
 	# Getters
 	############################################################################
 
@@ -301,6 +362,13 @@ class O(BaseModel, metaclass=OMeta):
 				lines.append(f'{name}: {value}')
 
 		return ' | '.join(lines)
+	
+	def set(self, **kwargs):
+		for k, v in kwargs.items():
+			if k != 'id':
+				setattr(self, k, v)
+		self.save()
+		return self
 
 	def clone(self):
 		data = self.to_dict()

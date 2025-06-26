@@ -3,41 +3,51 @@ from wordwield import ww
 
 
 class Project(ww.operators.Agent):
-	def __init__(self, name=None, schema: O = ww.schemas.ProjectSchema):
-		super().__init__(name=name, schema=schema)
-		Registry('agents',  self)
-		Registry('streams', self)
+	class DefinitionSchema(O):
+		name            : str
+		intent          : str             # description of what project must accomplish
+		description     : str             # description of the project
+		manager         : str = None      # name of manager agent
+		agents          : list[str]       # names of agents
+		streams         : list[str]       # names of streams
 
+	def __init__(self, name=None):
+		super().__init__(name=name)
+		
 	async def init(self):
-		for agent_name in self.schema.agents:
-			agent_schema            = self.ww.schemas.AgentSchema.load(agent_name)
-			agent                   = agent_schema.to_operator()
+		agent_dict = dict(self.agents)
+		if hasattr(self.__class__, 'agents'):
+			delattr(self.__class__, 'agents')
+
+		Registry('agents',  self)
+		# Registry('streams', self)
+
+		for agent_name, agent_class in agent_dict.items():
+			agent                   = agent_class(agent_name)
 			agent.project           = self
 			agent.state['project']  = self
 			self.agents[agent_name] = agent
 			Registry('streams_by_role', agent)
 
-		for stream_name in self.schema.streams:
-			stream_schema = self.ww.schemas.StreamSchema.load(stream_name)
-			self.streams[stream_name] = stream_schema
-			agent = self.agents[stream_schema.author]
-			agent.streams_by_role[stream_schema.role] = stream_schema
+		# for stream_name in self.schema.streams:
+		# 	stream_schema = self.ww.schemas.StreamSchema.load(stream_name)
+		# 	self.streams[stream_name] = stream_schema
+		# 	agent = self.agents[stream_schema.author]
+		# 	agent.streams_by_role[stream_schema.role] = stream_schema
 
-		
-
-		print('Loaded streams:', list(self.streams.keys()))
+		# print('Loaded streams:', list(self.streams.keys()))
 		
 	async def invoke(self):
 		since = 0.0
-		while True:
-			if prod_gulps := self.streams_by_role.prod_stream.read():
-				return prod_gulps
+		# while True:
+		# 	if prod_gulps := self.streams_by_role.prod_stream.read():
+		# 		return prod_gulps
 			
-			await self.agents.manager()
+		# 	await self.agents.manager()
 
-			if gulps := self.streams_by_role.invoke_stream.read(since = since):
-				since      = gulps[0].timestamp
-				agent_name = gulps[0].value
-				await self.agents[agent_name]()
-			else:
-				break
+		# 	if gulps := self.streams_by_role.invoke_stream.read(since = since):
+		# 		since      = gulps[0].timestamp
+		# 		agent_name = gulps[0].value
+		# 		await self.agents[agent_name]()
+		# 	else:
+		# 		break

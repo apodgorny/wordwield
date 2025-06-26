@@ -2,6 +2,12 @@ from time import time
 from wordwield.lib.o import O
 from typing import Optional
 
+
+class CompletionSchema(O):
+	name                 : str
+	story_preparation    : bool = False
+	character_extraction : bool = False
+
 ###########################################################################################
 
 class VoiceSchema(O):
@@ -10,11 +16,6 @@ class VoiceSchema(O):
 	style  : str = O.Field(semantic=True, description='Speech style or delivery')
 	intent : str = O.Field(semantic=True, description='What the voice is trying to convey')
 	prompt : str
-
-###########################################################################################
-
-class NumberSchema(O):
-	guessed_number: int
 
 ###########################################################################################
 
@@ -28,20 +29,10 @@ class StorySchema(O):
 	middle    : str       = O.Field(default=None, description='Текст или краткое описание того, как развивается история и соединяет начало и конец.')
 	scenes    : list[str] = O.Field(default=None, description='Список ключевых сцен, каждая кратко описана строкой, в повествовательном порядке.')
 
-class CharacterNamesSchema(O):
-	# name            : str       = O.Field(llm=False)
-	names : list[str] = O.Field(llm=True, description='Список имён упомянутых персонажей', default_factory=list)
-
-class CharacterDescriptionSchema(O):
-	descriptions : list[str] = O.Field(llm=True, description='Описания из текста характеризуюие персонажа', default_factory=list)
-
-class ScheneSchema(O):
-	...
-
-class ScenerySchema(O):
-	scenes : list[ScheneSchema]
-
-
+class CharacterSchema(O):
+	name         : str
+	alt_names    : list[str]
+	descriptions : list[str]
 
 ###########################################################################################
 
