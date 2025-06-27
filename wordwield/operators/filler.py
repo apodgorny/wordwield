@@ -7,24 +7,20 @@ class Filler(Agent):
 	# Public methods
 	#########################################################################
 
-	async def invoke(self, schema_name, fill_schema_class):
+	async def invoke(self, schema):
 		self.state.filled_fields = {}
 		self.state.next_field    = {}
 
-		fill_schema = fill_schema_class.load(schema_name)
-
-		for name, value, field in fill_schema.iter():
+		for name, value, field in schema.iter():
 			if not value:
 				self.state.next_field = {
 					'name'        : name,
 					'description' : field.extra['description']  # must have description set
 				}
-				response_schema, _ = fill_schema.split(by=lambda n, f: n == name)
-				prompt = self.fill()
-				print(response_schema)
-				result = await self.ask(prompt, schema=response_schema)
-				fill_schema[name] = result
-				fill_schema.save()
+				response_schema, _ = schema.split(by=lambda n, f: n == name)
+				result = await self.ask(self.fill(), schema=response_schema)
+				schema[name] = result
+				schema.save()
 				self.state.filled_fields[name] = result
-			elif name != 'name':
+			else:
 				self.state.filled_fields[name] = value

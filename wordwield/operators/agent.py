@@ -26,12 +26,27 @@ class Agent(Operator):
 
 	async def __call__(self, *args, **kwargs):
 		self.to_state(*args, **kwargs)
+		self._register_agents()
 		await self.init()
 		await self._collect_props()
 		return await self.invoke(*args, **kwargs)
 	
 	# Private
 	######################################################################
+
+	def _register_agents(self):
+		if hasattr(self.__class__, 'agents'):
+			agent_dict = dict(self.agents)
+			delattr(self.__class__, 'agents')
+
+			Registry('agents',  self)
+			# Registry('streams', self)
+
+			for agent_name, agent_class in agent_dict.items():
+				agent                   = agent_class(agent_name)
+				agent.owner             = self
+				agent.state['owner']    = self
+				self.agents[agent_name] = agent
 	
 	async def _collect_props(self, state=None):
 		state = state or self.state
@@ -60,9 +75,12 @@ class Agent(Operator):
 	
 	def fill(self, template: str = None, **vars) -> str:
 		template = template or self.template
+		if not template:
+			raise RuntimeError(f'Template is not defined in `{self.name}`')
+		
 		try:
 			template  = String.unindent(template)
-			all_vars  = {**self.state.to_dict(), **vars}
+			all_vars  = {**self.state.to_dict(), **vars, 'ww': self.ww }
 			env       = Environment(loader=BaseLoader())
 			jinja     = env.from_string(template)
 			prompt    = String.unindent(jinja.render(**all_vars))
@@ -74,6 +92,8 @@ class Agent(Operator):
 		schema                     = schema or self.ResponseSchema
 		llm_schema, non_llm_schema = schema.split('llm')
 		prompt                    += '\n\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
+
+		print(f'\n========================[ 😎 AGENT `{self.name}` ]========================\n')
 
 		partial = await self.ww.ask(
 			prompt = prompt,
@@ -89,7 +109,6 @@ class Agent(Operator):
 	async def write(self) : pass
 
 	async def invoke(self, *args, **kwargs):
-		print(f'\n========================[ AGENT `{self.name}` ]========================\n')
 		print(list(self.state.keys()))
 		prompt = self.fill(self.schema.template)
 		result = await self.ask(prompt=prompt, schema=self.response_schema)

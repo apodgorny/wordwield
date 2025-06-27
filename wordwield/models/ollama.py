@@ -35,7 +35,6 @@ class OllamaModel(Model):
 		try:
 			return output.encode('latin1').decode('utf-8')
 		except UnicodeError:
-			print('⚡ UnicodeError caught, returning original output')
 			return output
 
 	async def __call__(
@@ -65,16 +64,13 @@ class OllamaModel(Model):
 		if system:
 			params['messages'].insert(0, {'role': 'system', 'content': system})
 
-		print('⏳ Calling ollama.chat...')
-		print('-' * 30)
-		print('PROMPT', prompt)
+		print(prompt)
 		print('-' * 30)
 		response = await asyncio.to_thread(self.client.chat, **params)
-		print('✅ ollama.chat returned:')
-		text      = response['message']['content']
+		print(f'✅ {self.name} returned:')
+		text = response['message']['content'].strip()
 		print('-' * 30)
-		print('OUTPUT', text)
-		print('-' * 30)
+		print(text)
 		sanitized = self._sanitize_output(text)
 
 		return json.loads(sanitized)

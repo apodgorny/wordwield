@@ -15,20 +15,8 @@ class Project(ww.operators.Agent):
 		super().__init__(name=name)
 		
 	async def init(self):
-		agent_dict = dict(self.agents)
-		if hasattr(self.__class__, 'agents'):
-			delattr(self.__class__, 'agents')
-
-		Registry('agents',  self)
-		# Registry('streams', self)
-
-		for agent_name, agent_class in agent_dict.items():
-			agent                   = agent_class(agent_name)
-			agent.project           = self
-			agent.state['project']  = self
-			self.agents[agent_name] = agent
-			Registry('streams_by_role', agent)
-
+		...
+		# Registry('streams_by_role', agent)
 		# for stream_name in self.schema.streams:
 		# 	stream_schema = self.ww.schemas.StreamSchema.load(stream_name)
 		# 	self.streams[stream_name] = stream_schema

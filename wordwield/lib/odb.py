@@ -179,7 +179,6 @@ class ODB:
 	def get(self, id)       : return self._o_or_none(self.session.get(self._orm_class, id))
 	def first(self)         : return self._o_or_none(self.query().first())
 	def count(self)         : return self.query().count()
-	def all(self)           : return [r for r in self.query().all() if isinstance(r, self._orm_class)]
 	def refresh(self)       : self.session.refresh(self._o)
 	def expunge(self)       : self.session.expunge(self._o)
 	def add(self)           : self.session.add(self._o)
@@ -266,3 +265,25 @@ class ODB:
 			return tp(result[0])
 		else:
 			return field.default if field.default is not None else None
+		
+	@classmethod
+	def all(cls, o_class) -> dict:
+		'''
+		Load all saved instances of cls (O) into a dict, key=model.name.
+		'''
+		orm_class = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
+		if not inspect(ODB.session.bind).has_table(orm_class.__tablename__):
+			return {}
+		
+		objects = {}
+		records = ODB.session.query(orm_class).all()
+		for record in records:
+			data = T(T.SQLALCHEMY_MODEL, T.DATA, record)
+			obj_id = data.pop('id', None)
+			name = data.get('name')
+			o = o_class.model_construct(**data)
+			o.__db__ = ODB(o)
+			o.__id__ = obj_id
+			objects[name] = o
+			o.db._load_edges()
+		return objects

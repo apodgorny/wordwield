@@ -7,7 +7,6 @@ class ListExtractor(Agent):
 	# Public methods
 	#########################################################################
 
-	async def invoke(self, description, data=None):
-		schema = O.schema(items = O.Field(list[str], description=description))
-		self.to_state(data or {})
+	async def invoke(self, **kwargs):
+		schema = O.schema(items = O.Field(list[str], description=self.field_description))
 		return await self.ask(self.fill(), schema)

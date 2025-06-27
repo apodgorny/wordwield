@@ -1,9 +1,10 @@
 from wordwield import ww
 
 
-class CharacterDescriptionExtractor(ww.operators.ListExtractor):
-	intent     = 'Екстрагировать из текста описание характеризующее персонажа'
-	template   = '''
+class Descriptions(ww.operators.ListExtractor):
+	intent            = 'Екстрагировать из текста описание характеризующее персонажа'
+	field_description = 'Описания из текста характеризуюие персонажа'
+	template          = '''
 		Ты — писатель, который организует персонажей из текста.
 		Твоя цель — {{intent}}
 

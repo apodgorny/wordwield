@@ -2,7 +2,6 @@ import copy, re, json
 from typing import Any, get_args, get_origin, Union, List, Dict
 
 from pydantic        import BaseModel, create_model
-from pydantic.fields import FieldInfo
 from sqlalchemy      import Table, Column, MetaData, Integer, String, JSON, text
 from sqlalchemy.orm  import declarative_base
 
@@ -10,6 +9,7 @@ from .predicates  import is_atomic_dict, is_atomic_list, is_pydantic, is_pydanti
 from .transform   import T
 from .string      import String as S
 from .record      import Record
+from .o_field     import OField
 
 
 T.PYDANTIC(BaseModel)
@@ -19,7 +19,7 @@ T.DATA()
 T.ARGUMENTS(None)
 T.SQLALCHEMY_MODEL(object)
 T.PROMPT(str)
-T.FIELD(FieldInfo)
+T.FIELD(OField)
 T.TYPE(str)
 T.STRING(str)
 T.TREE(dict)
@@ -254,6 +254,8 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 					column_kwargs['nullable'] = False
 					column_kwargs['default']  = 0
 					column_kwargs['server_default'] = text('0')
+					column_kwargs['info'] = {'is_bool': True}
+
 				elif ftype is dict:
 					sql_type = JSON
 				else:
@@ -293,7 +295,8 @@ def sqlalchemy_model_to_pydantic(orm_cls: type) -> type[BaseModel]:
 		required = col.nullable is False and col.default is None and not col.autoincrement
 		default  = ... if required else None
 
-		fields[col.name] = (py_type, default)
+		field = OField(py_type, default=default, description=str(col.comment or ''))
+		fields[col.name] = (py_type, field)
 
 	name = orm_cls.__name__.replace('Orm', '') + 'Schema'
 	return create_model(name, **fields)
@@ -304,10 +307,15 @@ def sqlalchemy_model_to_data(obj):
 	if not hasattr(obj, '__table__'):
 		raise TypeError(f'❌ Expected SQLAlchemy model, got: {type(obj)} → {obj}')
 	columns = set(obj.__table__.columns.keys())
-	return {
-		k: getattr(obj, k)
-		for k in columns
-	}
+	data = {}
+	for k in columns:
+		val = getattr(obj, k)
+		col = obj.__table__.columns[k]
+		# SQLAlchemy bool columns may be Boolean() or a dialect variant
+		# if col.type is int:
+		# 	val = int(val)
+		data[k] = val
+	return data
 
 
 ######################################## TYPE ########################################
@@ -377,7 +385,7 @@ def type_to_prompt(tp: Any, indent: int = 0) -> str:
 
 
 @T.register(T.FIELD, T.PROMPT)
-def field_to_prompt(field: FieldInfo, indent: int = 0) -> str:
+def field_to_prompt(field: OField, indent: int = 0) -> str:
 	comment = f'  # {field.description}' if field.description else ''
 	value   = T(T.TYPE, T.PROMPT, field.annotation, indent + 1)
 	pad     = '  ' * indent

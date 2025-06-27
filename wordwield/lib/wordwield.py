@@ -258,13 +258,13 @@ class WordWield(metaclass=WordWieldMeta):
 		When registries implement their own to_dict, this can delegate to them.
 		'''
 		return {
-			'config'         : cls.config.to_dict(),
+			'config'         : cls.config.to_dict(cast_to_str=True),
 			'is_initialized' : cls.is_initialized,
 			'verbose'        : cls.verbose,
-			'operators'      : cls.operators.to_dict(), # Or cls.operators.to_dict() in the future
-			'schemas'        : cls.schemas.to_dict(),   # Or cls.schemas.to_dict()
-			'models'         : cls.models.to_dict(),    # Or cls.models.to_dict()
-			'expertise'      : cls.expertise.to_dict(), # Or cls.expertise.to_dict()
+			'operators'      : cls.operators.to_dict(cast_to_str=True), # Or cls.operators.to_dict() in the future
+			'schemas'        : cls.schemas.to_dict(cast_to_str=True),   # Or cls.schemas.to_dict()
+			'models'         : cls.models.to_dict(cast_to_str=True),    # Or cls.models.to_dict()
+			'expertise'      : cls.expertise.to_dict(cast_to_str=True), # Or cls.expertise.to_dict()
 			'test_items'     : ['foo', 'bar', 'baz']
 		}
 	

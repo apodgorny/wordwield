@@ -107,11 +107,14 @@ class Registry:
 		for k in d:
 			self[k] = d[k]
 
-	def to_dict(self):
+	def to_dict(self, cast_to_str=False):
 		result = {}
 		for k, item in self._items.items():
 			if isinstance(item, Registry):
-				result[k] = item.value.to_dict()
+				result[k] = item.to_dict(cast_to_str=cast_to_str)
 			else:
-				result[k] = item
+				if cast_to_str:
+					result[k] = str(item)
+				else:
+					result[k] = item
 		return result

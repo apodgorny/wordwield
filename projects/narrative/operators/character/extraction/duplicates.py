@@ -1,9 +1,10 @@
 from wordwield import ww
 
 
-class CharacterDupExtractor(ww.operators.DictExtractor):
-	intent     = 'Найти упомянания персонажей в тексте'
-	template   = '''
+class Duplicates(ww.operators.DictExtractor):
+	intent            = 'Найти упомянания персонажей в тексте'
+	field_description = 'Найденное в тексте альтернативное имя для'
+	template          = '''
 		Ты — писатель, который организует персонажей из текста.
 		Твоя цель — {{intent}}
 
@@ -29,6 +30,5 @@ class CharacterDupExtractor(ww.operators.DictExtractor):
 		-----------
 		{{text}}
 		-----------
-
-		Возвращай ТОЛЬКО альтернативные имена упомянутые в Тексте, или пустую строку.
+		Возвращай ТОЛЬКО альтернативные имена упомянутые в Тексте.
 	'''

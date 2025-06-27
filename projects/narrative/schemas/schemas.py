@@ -4,9 +4,13 @@ from typing import Optional
 
 
 class CompletionSchema(O):
-	name                 : str
-	story_preparation    : bool = False
-	character_extraction : bool = False
+	name                          : str
+	story_preparation             : bool = False
+	character_extraction          : bool = False
+	location_extraction           : bool = False
+	character_development         : bool = False
+	character_mission_development : bool = False
+	scene_development             : bool = False
 
 ###########################################################################################
 
@@ -33,6 +37,24 @@ class CharacterSchema(O):
 	name         : str
 	alt_names    : list[str]
 	descriptions : list[str]
+	mission      : str
+	fear         : str       = O.Field(default=None, description='Глубокий страх персонажа на который опирается его поведение. Одно предложение')
+	desire       : str       = O.Field(default=None, description='Глубокое желание персонажа, которое недостижимо из за страха. Одно предложение.')
+	bypass       : str       = O.Field(default=None, description='Как персонаж добивается части желаемого в обход своего страха')
+	strategy1    : str       = O.Field(default=None, description='Какую манипуляцию персонаж использует, чтобы обходным путём добиться желаемого. 1-3 предложения')
+	strategy2    : str       = O.Field(default=None, description='Когда первый способ не помогает, какую ДРУГУЮ манипуляцию персонаж использует, чтобы обходным путём добиться желаемого. 1-3 предложения')
+	square1      : int       = O.Field(default=None, description='Номер квадрата (1-4) для первой стратегии - strategy1 по принципу Квадрат Подгорного')
+	square2      : int       = O.Field(default=None, description='Номер квадрата (1-4) для второй стратегии - strategy2 по принципу Квадрат Подгорного')
+	resource     : str       = O.Field(default=None, description='Эмоциональный Ресурс. В 2-3 слова описание внутреннего эмоционального состояния которое персонаж пытается получить извне через свои стратегии манипуляции')
+	trigger      : str       = O.Field(default=None, description='Кнопки. В одно-два предложения: события, поведение других, неприятные мелочи которые "включают" в персонаже страх потери "ресурса" заставляющий применять манипуляции')
+	voice1       : str       = O.Field(default=None, description='Голос субличности 1 не длиннее одного предложения. Если бы у первой стратегии (strategy1) был голос, как бы она выразилась, что бы сказала, потребовала, попросила, о чем промолчала? (В ОДНО ПРЕДЛОЖЕНИЕ)')
+	voice2       : str       = O.Field(default=None, description='Голос субличности 2 не длиннее одного предложения. Если бы у второй стратегии (strategy2) был голос, как бы она выразилась, что бы сказала, потребовала, попросила, о чем промолчала? (В ОДНО ПРЕДЛОЖЕНИЕ)')
+
+
+class LocationSchema(O):
+	name         : str
+	alt_names    : list[str]
+	descriptions : list[str]
 
 ###########################################################################################
 
@@ -43,7 +65,7 @@ class CharacterSchema(O):
 # 	characters : list[AgentSchema] = O.Field(semantic=True, description='Characters involved in the situation')
 
 # class SceneSchema(O):
-# 	title    : str             = O.Field(semantic=True, description='Scene title')
+# 	name     : str
+# 	title    : str             = O.Field(semantic=True, description='Scene title in 1–3 words')
 # 	start    : SituationSchema = O.Field(semantic=True, description='Initial situation')
 # 	end      : SituationSchema = O.Field(semantic=True, description='Final situation')
-# 	timeline : TimelineSchema  = O.Field(semantic=True, description='Timeline of the scene')

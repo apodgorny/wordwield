@@ -1,52 +1,15 @@
-import os, json, types
+import json
 
-from typing                                 import Any, get_args, get_origin, Union, List, Dict
+from typing                                 import Any, get_args
 
-from pydantic                               import BaseModel, Field as PydanticField, model_validator, ValidationError
-from pydantic.fields                        import FieldInfo
+from pydantic                               import BaseModel, model_validator, ValidationError
 from pydantic_core                          import PydanticUndefined
 from pydantic._internal._model_construction import ModelMetaclass
 
 from .predicates                            import is_list, is_dict, unwrap_optional, is_annotation
+from .o_field                               import OField
 from .t                                     import T
 from .odb                                   import ODB
-
-
-################################################################################################################
-# class OField
-################################################################################################################
-
-class OField(FieldInfo):
-	def __init__(self, *args, description='', **kwargs):
-		extra = kwargs.pop('json_schema_extra', {}) or {}
-		if description:
-			extra['description']  = description
-			kwargs['description'] = description
-
-		if args:
-			if is_annotation(args[0]):
-				args = list(args)
-				self._type = args.pop()
-		if args:
-			raise RuntimeError(f'OField: Unexpected positional args: {args}')
-
-		for k, v in dict(kwargs).items():
-			if not (isinstance(v, type) or isinstance(v, types.FunctionType)):
-				extra[k] = v
-			if k not in ['default', 'default_factory', 'description']:
-				kwargs.pop(k)
-
-		super().__init__(json_schema_extra=extra, **kwargs)
-
-	@property
-	def extra(self):
-		return self.json_schema_extra or {}
-	
-	def get_type(self):
-		return getattr(self, '_type', None)
-	
-	def get_default(self):
-		return self.default if self.default is not None else (self.default_factory if self.default_factory is not None else ...)
 
 
 ################################################################################################################
@@ -55,11 +18,33 @@ class OField(FieldInfo):
 
 
 class OMeta(ModelMetaclass):
+	# def __new__(mcs, name, bases, namespace, **kwargs):
+	# 	annotations = dict(namespace.get('__annotations__', {}))
+	# 	for fname, field in namespace.items():
+	# 		if isinstance(field, OField) and 'type' in field.extra:
+	# 			annotations[fname] = field.extra['type']
+	# 	namespace['__annotations__'] = annotations
+	# 	return super().__new__(mcs, name, bases, namespace, **kwargs)
+	
 	def __new__(mcs, name, bases, namespace, **kwargs):
 		annotations = dict(namespace.get('__annotations__', {}))
+
+		# 1. Upgrade all OField with 'type' in extra
 		for fname, field in namespace.items():
 			if isinstance(field, OField) and 'type' in field.extra:
 				annotations[fname] = field.extra['type']
+
+		# 2. Ensure every field has OField (including those with only annotation)
+		for fname, tp in annotations.items():
+			# If not set or not an OField
+			val = namespace.get(fname, None)
+			if not isinstance(val, OField):
+				# Replace with OField, try to preserve default if present
+				default = getattr(val, 'default', PydanticUndefined) if val is not None else PydanticUndefined
+				if default is PydanticUndefined:
+					default = None
+				namespace[fname] = OField(tp, default=default)
+
 		namespace['__annotations__'] = annotations
 		return super().__new__(mcs, name, bases, namespace, **kwargs)
 	
@@ -216,16 +201,20 @@ class O(BaseModel, metaclass=OMeta):
 	
 	@classmethod
 	def get(cls, name) -> 'O':
-		return cls.put(name)
+		if cls.exists(name):
+			return cls.load(name)
+		return None
+	
+	@classmethod
+	def all(cls) -> dict[str, 'O']:
+		return ODB.all(cls)
 	
 	@classmethod
 	def put(cls, name, **kwargs):
-		if cls.exists(name):
-			obj = cls.load(name)
-		else:
-			obj = cls(name=name, **kwargs)
-		obj.set(**kwargs) # call the instance method!
-		return obj
+		o = cls.get(name)
+		if o is None:
+			o = cls(name=name, **kwargs)
+		return o.set(**kwargs) # call the instance method
 	
 	@classmethod
 	def pack(cls, args):
