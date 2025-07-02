@@ -11,6 +11,18 @@ def unwrap_optional(tp):
 			return unwrap_optional(args[0])
 	return tp
 
+def get_default(tp):
+	tp     = unwrap_optional(tp)
+	origin = get_origin(tp)
+
+	if origin in (list, tuple, set, dict) : return origin()
+	if tp     in (str, int, float, bool)  : return tp()
+
+	try              : return tp()
+	except Exception : return None
+
+##############################################################################
+
 def is_atomic_type(tp):
 	# Atomic — int, str, float, bool
 	tp = unwrap_optional(tp)

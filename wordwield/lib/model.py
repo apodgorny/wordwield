@@ -25,6 +25,11 @@ class Model:
 		model.model_id       = model_id
 
 		return model
+	
+	@classmethod
+	def restart(cls):
+		if hasattr(cls, 'model'):
+			cls.model.restart_model()
 		
 	##################################################################
 		
@@ -46,8 +51,8 @@ class Model:
 			if not issubclass(response_schema, O):
 				raise ValueError(f'Model.generate requires `response_model` to be a subclass of `O`, but received `{type(response_schema)}`')
 
-			model  = Model.load(model_id, ww.models)
-			result = await model(
+			cls.model  = Model.load(model_id, ww.models)
+			result = await cls.model(
 				prompt          = prompt,
 				response_schema = response_schema.to_jsonschema(),
 				role            = role,
@@ -61,3 +66,6 @@ class Model:
 
 		except Exception as e:
 			raise WwException.consume(e)
+		
+	def restart_model(self):
+		pass

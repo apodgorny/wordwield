@@ -54,3 +54,4 @@ class OpenaiModel(Model):
 			raise ValueError(f'OpenAIModel JSON parsing error: {e}')
 		except Exception as e:
 			raise ValueError(f'OpenAIModel LLM communication error: {e}')
+		

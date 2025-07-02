@@ -9,7 +9,7 @@ class CompletionSchema(O):
 	character_extraction          : bool = False
 	location_extraction           : bool = False
 	character_development         : bool = False
-	character_mission_development : bool = False
+	# character_mission_development : bool = False
 	scene_development             : bool = False
 
 ###########################################################################################
@@ -31,16 +31,14 @@ class StorySchema(O):
 	beginning : str       = O.Field(default=None, description='Текст или краткое описание начальной части истории.')
 	end       : str       = O.Field(default=None, description='Текст или краткое описание заключительной или финальной части истории.')
 	middle    : str       = O.Field(default=None, description='Текст или краткое описание того, как развивается история и соединяет начало и конец.')
-	scenes    : list[str] = O.Field(default=None, description='Список ключевых сцен, каждая кратко описана строкой, в повествовательном порядке.')
 
 class CharacterSchema(O):
 	name         : str
 	alt_names    : list[str]
 	descriptions : list[str]
-	mission      : str
 	fear         : str       = O.Field(default=None, description='Глубокий страх персонажа на который опирается его поведение. Одно предложение')
 	desire       : str       = O.Field(default=None, description='Глубокое желание персонажа, которое недостижимо из за страха. Одно предложение.')
-	bypass       : str       = O.Field(default=None, description='Как персонаж добивается части желаемого в обход своего страха')
+	bypass       : str       = O.Field(default=None, description='Какое искаженое поведение персонаж использует чтобы получить желаемое. Удаётся ли ему?')
 	strategy1    : str       = O.Field(default=None, description='Какую манипуляцию персонаж использует, чтобы обходным путём добиться желаемого. 1-3 предложения')
 	strategy2    : str       = O.Field(default=None, description='Когда первый способ не помогает, какую ДРУГУЮ манипуляцию персонаж использует, чтобы обходным путём добиться желаемого. 1-3 предложения')
 	square1      : int       = O.Field(default=None, description='Номер квадрата (1-4) для первой стратегии - strategy1 по принципу Квадрат Подгорного')
@@ -49,6 +47,8 @@ class CharacterSchema(O):
 	trigger      : str       = O.Field(default=None, description='Кнопки. В одно-два предложения: события, поведение других, неприятные мелочи которые "включают" в персонаже страх потери "ресурса" заставляющий применять манипуляции')
 	voice1       : str       = O.Field(default=None, description='Голос субличности 1 не длиннее одного предложения. Если бы у первой стратегии (strategy1) был голос, как бы она выразилась, что бы сказала, потребовала, попросила, о чем промолчала? (В ОДНО ПРЕДЛОЖЕНИЕ)')
 	voice2       : str       = O.Field(default=None, description='Голос субличности 2 не длиннее одного предложения. Если бы у второй стратегии (strategy2) был голос, как бы она выразилась, что бы сказала, потребовала, попросила, о чем промолчала? (В ОДНО ПРЕДЛОЖЕНИЕ)')
+	problem      : str       = O.Field(default=None, description='Текущая проблема жизни, которую невозможно обойти. Одно предложение')
+	mission      : str       = O.Field(default=None, description='Конкретное действие, которое должно быть сделано. Необходимый результат который по мнению персонажа решит проблему "problem"')
 
 
 class LocationSchema(O):

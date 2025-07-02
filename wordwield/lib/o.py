@@ -39,11 +39,7 @@ class OMeta(ModelMetaclass):
 			# If not set or not an OField
 			val = namespace.get(fname, None)
 			if not isinstance(val, OField):
-				# Replace with OField, try to preserve default if present
-				default = getattr(val, 'default', PydanticUndefined) if val is not None else PydanticUndefined
-				if default is PydanticUndefined:
-					default = None
-				namespace[fname] = OField(tp, default=default)
+				namespace[fname] = OField(tp, **kwargs)
 
 		namespace['__annotations__'] = annotations
 		return super().__new__(mcs, name, bases, namespace, **kwargs)
@@ -184,6 +180,19 @@ class O(BaseModel, metaclass=OMeta):
 	@classmethod
 	def to_jsonschema(cls) -> dict:
 		return T(T.PYDANTIC, T.DEREFERENCED_JSONSCHEMA, cls)
+	
+	@classmethod
+	def to_default(cls) -> 'O':
+		'''
+		Создаёт экземпляр схемы, заполнив все поля с заданными default/default_factory.
+		Обязательные поля без дефолта будут пропущены — вызов может упасть, если они нужны.
+		'''
+		defaults = {
+			name: field.get_default()
+			for name, field in cls.model_fields.items()
+			if field.get_default() is not ...
+		}
+		return cls.model_construct(**defaults)
 	
 	@classmethod
 	def load(cls, ref: int | str) -> 'O':
@@ -391,6 +400,8 @@ class O(BaseModel, metaclass=OMeta):
 		for name, field in self.model_fields.items():
 			kind, _ = self.get_field_kind(name, field.annotation)
 			val = getattr(self, name, None)
+			if val is PydanticUndefined or val is None:
+				continue
 			if kind == 'single' and val is not None:
 				yield ('', val)
 			elif kind == 'list' and val:

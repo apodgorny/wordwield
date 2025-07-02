@@ -2,6 +2,19 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "▶ Life",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/projects/life/main.py",
+			"cwd": "${workspaceFolder}/projects/life",
+			"python": "${config:python.defaultInterpreterPath}",
+			"console": "integratedTerminal",
+			"justMyCode": false,
+			"env": {
+				"PYTHONPATH": "${workspaceFolder}"
+			}
+		},
+		{
 			"name": "▶ Narrative",
 			"type": "python",
 			"request": "launch",

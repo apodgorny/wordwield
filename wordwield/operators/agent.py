@@ -23,10 +23,11 @@ class Agent(Operator):
 	def __init__(self, name=None):
 		super().__init__(name=name)
 		Registry('state', self)
+		self._register_agents()
+		self._register_streams()
 
 	async def __call__(self, *args, **kwargs):
 		self.to_state(*args, **kwargs)
-		self._register_agents()
 		await self.init()
 		await self._collect_props()
 		return await self.invoke(*args, **kwargs)
@@ -38,15 +39,28 @@ class Agent(Operator):
 		if hasattr(self.__class__, 'agents'):
 			agent_dict = dict(self.agents)
 			delattr(self.__class__, 'agents')
-
 			Registry('agents',  self)
-			# Registry('streams', self)
 
 			for agent_name, agent_class in agent_dict.items():
 				agent                   = agent_class(agent_name)
 				agent.owner             = self
 				agent.state['owner']    = self
 				self.agents[agent_name] = agent
+
+	def _register_streams(self):
+		if hasattr(self.__class__, 'streams'):
+			stream_list = list(self.streams)
+			delattr(self.__class__, 'streams')
+			Registry('streams',  self)
+
+			for stream_name in stream_list:
+				full_stream_name = f'{self.__class__.ns}.{self.name}__{stream_name}'.replace('operators.', '')
+				stream = self.ww.schemas.StreamSchema.put(
+					name   = full_stream_name,
+					role   = stream_name,
+					author = self.name
+				)
+				self.streams[stream_name] = stream
 	
 	async def _collect_props(self, state=None):
 		state = state or self.state
@@ -88,7 +102,8 @@ class Agent(Operator):
 			raise ValueError(f'Could not fill template in agent `{self.name}`: {str(e)}')
 		return prompt
 
-	async def ask(self, prompt='', schema=None, unpack=True, **extra_fields):
+	async def ask(self, prompt=None, schema=None, unpack=True, **extra_fields):
+		prompt                     = prompt or self.fill()
 		schema                     = schema or self.ResponseSchema
 		llm_schema, non_llm_schema = schema.split('llm')
 		prompt                    += '\n\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()

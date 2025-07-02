@@ -11,7 +11,7 @@ class GulpSchema(O):
 	value     : str           = O.Field(description='Output value',       llm=True,  semantic=True)
 	author    : Optional[str] = O.Field(description='Optional author',    llm=False, default=None)
 
-	def __str__(self)  : return f'Gulp [{self.timestamp}] "{self.value}"'
+	def __str__(self)  : return f'Gulp [{self.timestamp}] {self.author}: "{self.value}"'
 	def __repr__(self) : return str(self)
 	
 	@classmethod
@@ -26,13 +26,13 @@ class StreamSchema(O):
 	author : Optional[str]              = O.Field(description='Name of agent who owns this stream')
 
 	@classmethod
-	def zip(cls, names):
-		names = [names] if isinstance(names, str) else names
+	def zip(cls, *names):
+		# names = [names] if isinstance(names, str) else names
 		gulps = []
 		for name in names:
 			stream = cls.load(name)
 			for g in stream.gulps:
-				g.author = stream.author
+				g.author = g.author or stream.author
 				gulps.append(g)
 		gulps.sort(key=lambda g: g.timestamp)
 		return cls(name='+'.join(names), gulps=gulps, author='', role='')
@@ -56,14 +56,15 @@ class StreamSchema(O):
 			limit = int(limit)
 			gulps = gulps[-limit:] if limit > 0 else gulps
 		for g in gulps:
-			g.author = self.author or g.author
+			g.author = g.author or self.author
 		return gulps
 
-	def write(self, values):
+	def write(self, values, author=None):
 		if isinstance(values, str): values = [values]
 		for value in values:
-			gulp = GulpSchema(value=str(value))
+			gulp = GulpSchema(value=str(value), author=author)
 			self.gulps.append(gulp)
+			self.save()
 			self.log(value)
 		return self
 	

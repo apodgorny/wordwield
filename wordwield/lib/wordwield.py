@@ -146,6 +146,7 @@ class WordWield(metaclass=WordWieldMeta):
 					classes = Module.find_all_classes_by_base(base, fpath)
 					if classes:
 						for klass in classes:
+							setattr(klass, 'ns', reg.get_ns())
 							klass.ww = cls
 							reg[klass.__name__] = ClassRegistryItem(klass, {'origin': orig})
 					remaining.remove(item)
@@ -241,6 +242,7 @@ class WordWield(metaclass=WordWieldMeta):
 		prompt,
 		schema,
 		model_id    = 'ollama::gemma3:4b',
+		# model_id    = 'ollama::gemma3n:e4b',
 		temperature = 0.0
 	):
 		return await Model.generate(

@@ -32,15 +32,16 @@ class ClassRegistryItem(RegistryItem):
 	
 
 class Registry:
-	def __init__(self, ns='', owner=None):
+	def __init__(self, ns='', owner=None, fields=None):
 		if owner:
 			if hasattr(owner, ns) and getattr(owner, ns) is not None:
 				raise RuntimeError(f'Could not attach registry `{ns}` to `{str(owner)}`. Attribute `{ns}` already exists and is not None.')
 			else:
 				setattr(owner, ns, self)
 
-		self._items = {}
-		self._ns    = ns
+		self._allowed_fields = fields
+		self._items          = {}
+		self._ns             = ns
 
 	def subregistry(self, name):
 		ns = f'{self._ns}.{name}' if self._ns else name
@@ -48,6 +49,28 @@ class Registry:
 		self._items[name] = reg
 		reg._ns = ns
 		return reg
+	
+	def __getitem__(self, name):
+		# Dotted notation
+		if '.' in name:
+			parts = name.split('.')
+			reg = self
+			for part in parts[:-1]:
+				reg = reg._items.get(part)
+				if reg is None or not isinstance(reg, Registry):
+					raise AttributeError(f'Registry `ww.{self._ns}` has no subregistry `{part}`')
+			name = parts[-1]
+			return reg[name]
+		
+		# Regular notation: no dot
+		if name in self._items:
+			if isinstance(self._items[name], Registry):
+				return self._items[name]
+			elif isinstance(self._items[name], RegistryItem):
+				return self._items[name].value
+			return self._items[name]
+		raise AttributeError(f'Registry `ww.{self._ns}` has no item `{name}`')
+
 
 	def __getitem__(self, name):
 		if name in self._items:
@@ -59,7 +82,10 @@ class Registry:
 		raise AttributeError(f'Registry `ww.{self._ns}` has no item `{name}`')
 	
 	def __setitem__(self, name, value):
-		self._items[name] = value
+		if self._allowed_fields is None or name in self._allowed_fields:
+			self._items[name] = value
+		else:
+			raise KeyError(f'Field name `{name}` is not allowed in registry `{self._ns}`.')
 		return value
 
 	def __getattr__(self, name):
@@ -118,3 +144,6 @@ class Registry:
 				else:
 					result[k] = item
 		return result
+	
+	def get_ns(self):
+		return self._ns

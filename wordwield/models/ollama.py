@@ -1,9 +1,4 @@
-import re
-import json
-import codecs
-import asyncio
-import ollama
-from pydantic import BaseModel
+import re, json, codecs, asyncio, ollama, subprocess, time
 
 from wordwield.lib import Model
 
@@ -74,3 +69,14 @@ class OllamaModel(Model):
 		sanitized = self._sanitize_output(text)
 
 		return json.loads(sanitized)
+	
+	def restart_model(self):
+		print(f'\nRESTARTING ollama::{self.name} ...')
+		subprocess.run(['ollama', 'unload', self.name])
+		time.sleep(1)
+		subprocess.run(['ollama', 'stop'])
+		time.sleep(2)
+		subprocess.run(['ollama', 'run', self.name, '-p', 'say hello and nothing else'])
+		print('RESTART COMPLETE\n')
+
+		

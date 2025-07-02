@@ -2,6 +2,8 @@ from sqlalchemy                import inspect
 from sqlalchemy.orm            import Session
 from sqlalchemy.exc            import IntegrityError
 
+from pydantic_core             import PydanticUndefined
+
 from typing                    import get_origin, List, Dict
 from wordwield.lib.predicates  import is_list, is_dict
 from wordwield.lib.t           import T
@@ -11,7 +13,6 @@ from wordwield.db              import EdgeRecord
 
 class ODB:
 	session = None
-	types   = {}
 	objects = {}
 
 	# Class methods
@@ -20,7 +21,8 @@ class ODB:
 	@classmethod
 	def load(cls, id_or_name: int | str, o_class: 'O') -> 'O':
 		if isinstance(o_class, str):
-			o_class = cls.types[o_class]
+			from wordwield import ww
+			o_class = ww.schemas[o_class]
 
 		key = (o_class, id_or_name)
 		if key in cls.objects:
@@ -30,24 +32,24 @@ class ODB:
 		orm_obj   = None
 		orm_class = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
 
-		if id_or_name == 'source':
-			i = 1
-		
 		if isinstance(id_or_name, int):
 			orm_obj = cls._load_by_id(id_or_name, orm_class)
-		if isinstance(id_or_name, str):
+		elif isinstance(id_or_name, str):
 			orm_obj = cls._load_by_name(id_or_name, orm_class)
-	
+
 		if orm_obj is not None:
-			data = T(T.SQLALCHEMY_MODEL, T.DATA, orm_obj)
-			id = data.pop('id')
-			o = o_class.model_construct(**data)
-		
-			o.__db__  = ODB(o)
-			o.__id__  = id
+			data     = T(T.SQLALCHEMY_MODEL, T.DATA, orm_obj)
+			obj_id   = data.pop('id')
+			o        = o_class.to_default()
+			for k, v in data.items():
+				setattr(o, k, v)
+
+			o.__db__ = ODB(o)
+			o.__id__ = obj_id
 
 			cls.objects[key] = o
 			o.db._load_edges()
+
 		return o
 
 	@classmethod
@@ -191,6 +193,11 @@ class ODB:
 		data   = self._o.to_dict()
 		obj_id = getattr(self._o, '__id__', None)
 
+		data = {
+			k: (None if v is PydanticUndefined else v)
+			for k, v in data.items()
+		}
+
 		self.create_table()
 
 		for _, child in self._o.iter_nested():
@@ -247,9 +254,10 @@ class ODB:
 			elif edge.rel2 == name and edge.id2 == o.id:
 				result.append(ODB.load(edge.id1, edge.type1))
 
+		print(name)
 		field = o.model_fields.get(name)
 		if field is None:
-			raise AttributeError(f'Field `{name}` not found in {o.__class__.__name__}')
+			raise AttributeError(f'Field `{name}` does not exist in `{o.__class__.__name__}` schema.')
 		tp = field.annotation
 
 		if is_list(tp):

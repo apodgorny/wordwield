@@ -2,6 +2,7 @@ import copy, re, json
 from typing import Any, get_args, get_origin, Union, List, Dict
 
 from pydantic        import BaseModel, create_model
+from pydantic_core   import PydanticUndefined
 from sqlalchemy      import Table, Column, MetaData, Integer, String, JSON, text
 from sqlalchemy.orm  import declarative_base
 
@@ -77,8 +78,9 @@ def model_to_string(obj, base_level=0):
 	for i, (k, v) in enumerate(items):
 		is_last = i == len(items) - 1
 		comma   = '' if is_last else ','
-		formatted = fmt_value(v, base_level + 1)
-		lines.append(field_indent + f'"{k}": {formatted}{comma}')
+		if v is not None:
+			formatted = fmt_value(v, base_level + 1)
+			lines.append(field_indent + f'"{k}": {formatted}{comma}')
 	
 	lines.append(base_indent + '}')
 	result = '\n'.join(lines)
@@ -307,16 +309,13 @@ def sqlalchemy_model_to_data(obj):
 	if not hasattr(obj, '__table__'):
 		raise TypeError(f'❌ Expected SQLAlchemy model, got: {type(obj)} → {obj}')
 	columns = set(obj.__table__.columns.keys())
-	data = {}
+	data    = {}
 	for k in columns:
 		val = getattr(obj, k)
-		col = obj.__table__.columns[k]
-		# SQLAlchemy bool columns may be Boolean() or a dialect variant
-		# if col.type is int:
-		# 	val = int(val)
+		if val is PydanticUndefined:
+			continue  # skip 
 		data[k] = val
 	return data
-
 
 ######################################## TYPE ########################################
 
