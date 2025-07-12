@@ -1,4 +1,4 @@
-import json
+import json, yaml
 
 from typing                                 import Any, get_args
 
@@ -36,14 +36,18 @@ class OMeta(ModelMetaclass):
 
 		# 2. Ensure every field has OField (including those with only annotation)
 		for fname, tp in annotations.items():
-			# If not set or not an OField
 			val = namespace.get(fname, None)
-			if not isinstance(val, OField):
+			if isinstance(val, OField):
+				if val.get_type() is None:
+					val.set_type(tp)      # set type!
+			else:
 				namespace[fname] = OField(tp, **kwargs)
 
 		namespace['__annotations__'] = annotations
-		return super().__new__(mcs, name, bases, namespace, **kwargs)
-	
+		o_class   = super().__new__(mcs, name, bases, namespace, **kwargs)
+		o_class.__orm_class__ = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
+		return o_class
+		
 	def __str__(cls):
 		items = []
 		for name, field in cls.model_fields.items():
@@ -85,7 +89,7 @@ class O(BaseModel, metaclass=OMeta):
 		for k in ['id', 'global_name']:
 			if k in kwargs:
 				raise KeyError(f'Attribute `{k}` is reserved. Use `{self.__class__.__name__}.load({k})` instead')
-
+			
 		super().__init__(**kwargs)
 
 	def __getattr__(self, name: str):
@@ -142,6 +146,10 @@ class O(BaseModel, metaclass=OMeta):
 	@classmethod
 	def has_field(cls, field: str) -> bool:
 		return field in cls.model_fields
+	
+	@classmethod
+	def has_table(cls):
+		return ODB.table_exists(cls.__orm_class__.__tablename__)
 
 	@classmethod
 	def is_o_type(cls, tp: Any) -> bool:
@@ -215,8 +223,11 @@ class O(BaseModel, metaclass=OMeta):
 		return None
 	
 	@classmethod
-	def all(cls) -> dict[str, 'O']:
-		return ODB.all(cls)
+	def all(cls, as_dict=False) -> dict[str, 'O']:
+		items = ODB.all(cls)
+		if as_dict:
+			return {item.name: item for item in items}
+		return items
 	
 	@classmethod
 	def put(cls, name, **kwargs):
@@ -340,6 +351,7 @@ class O(BaseModel, metaclass=OMeta):
 
 	def to_prompt(self)                 -> str  : return self.to_json()
 	def to_json(self, r=False)          -> str  : return json.dumps(self.to_dict(r, e=True), indent=4, ensure_ascii=False)
+	def to_yaml(self, r=False, e=False) -> str  : return yaml.dump(self.to_dict(r=r, e=e), allow_unicode=True, sort_keys=False)
 	def to_dict(self, r=False, e=False) -> dict : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
 	def to_tree(self)                   -> str  : return T(T.PYDANTIC, T.TREE, self)
 	def to_schema(self)                 -> type : return self.__class__

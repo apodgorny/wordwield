@@ -7,7 +7,7 @@ class Filler(Agent):
 	# Public methods
 	#########################################################################
 
-	async def invoke(self, schema):
+	async def invoke(self, schema, **kwargs):
 		self.state.filled_fields = {}
 		self.state.next_field    = {}
 

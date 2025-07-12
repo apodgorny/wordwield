@@ -27,6 +27,16 @@ class Agent(Operator):
 		self._register_streams()
 
 	async def __call__(self, *args, **kwargs):
+		signature = inspect.signature(self.invoke)
+		arg_names = [param.name for param in signature.parameters.values()]
+		print(arg_names)
+
+		n = 0
+		for n in range(min(len(args), len(arg_names))):
+			kwargs[arg_names[n]] = args[n]
+
+		args = args[n+1:]
+
 		self.to_state(*args, **kwargs)
 		await self.init()
 		await self._collect_props()
@@ -65,7 +75,7 @@ class Agent(Operator):
 	async def _collect_props(self, state=None):
 		state = state or self.state
 		for name in dir(self.__class__):
-			if name.startswith('__'):
+			if not name.startswith('__'):
 				prop = getattr(self.__class__, name)
 				if isinstance(prop, property):
 					prop = getattr(self, name)
@@ -83,8 +93,7 @@ class Agent(Operator):
 			if isinstance(obj, dict):
 				self.state.update(obj)
 			else:
-				# raise ValueError(f'Object `{obj}({type(obj)})` is not a dict or does not have to_dict() in agent `{self.name}`')
-				...
+				raise ValueError(f'Object `{str(obj)[:20]}...` of type {type(obj)} must have associated key to be stored in state of `{self.name}`')
 		self.state.update(kwargs)
 	
 	def fill(self, template: str = None, **vars) -> str:
@@ -105,8 +114,13 @@ class Agent(Operator):
 	async def ask(self, prompt=None, schema=None, unpack=True, **extra_fields):
 		prompt                     = prompt or self.fill()
 		schema                     = schema or self.ResponseSchema
+		instruction                = f'''\n\nPut all data into JSON, output JSON ONLY. Wrap strings in quotes, make sure JSON is valid:\n'''
+
+		if schema is None:
+			raise RuntimeError(f'No ResponseSchema is defined in agent `{self.name}`')
+		
 		llm_schema, non_llm_schema = schema.split('llm')
-		prompt                    += '\n\nPut all data into JSON:\n' + llm_schema.to_schema_prompt()
+		prompt                    += instruction + llm_schema.to_schema_prompt()
 
 		print(f'\n========================[ 😎 AGENT `{self.name}` ]========================\n')
 
@@ -124,7 +138,6 @@ class Agent(Operator):
 	async def write(self) : pass
 
 	async def invoke(self, *args, **kwargs):
-		print(list(self.state.keys()))
 		prompt = self.fill(self.schema.template)
 		result = await self.ask(prompt=prompt, schema=self.response_schema)
 		await self.write()

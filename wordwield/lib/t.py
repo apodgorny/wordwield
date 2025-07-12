@@ -247,6 +247,7 @@ def pydantic_to_sqlalchemy_model(model: type[BaseModel]) -> type:
 			excluded = is_excluded_type(ftype)
 
 			if not excluded:
+				column_kwargs = {}
 				if is_atomic_list(ftype) or is_atomic_dict(ftype):
 					sql_type = JSON
 				elif ftype is int:
@@ -342,6 +343,8 @@ def type_to_string(tp: Any) -> str:
 
 	if hasattr(tp, '__name__'):
 		return tp.__name__
+		# name = tp.__name__
+		# return f'"{name}"' if name == 'str' else name
 
 	return str(tp)
 

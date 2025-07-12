@@ -2,6 +2,14 @@ import typing, types, sys
 from typing import List, Dict, Optional, Any, Union, get_args, get_origin
 from pydantic import BaseModel
 
+def is_optional(tp):
+	return get_origin(tp) is Union and type(None) in get_args(tp)
+
+def wrap_optional(tp):
+	# Если tp уже Optional[...] — не трогаем
+	if get_origin(tp) is Union and type(None) in get_args(tp):
+		return tp
+	return Optional[tp]
 
 def unwrap_optional(tp):
 	origin = get_origin(tp)

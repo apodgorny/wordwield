@@ -142,7 +142,6 @@ class WordWield(metaclass=WordWieldMeta):
 				base  = item['base_class']
 				orig  = item['origin']
 				try:
-					print(f'[register] Pass {n_passes}: Registering {fpath}')
 					classes = Module.find_all_classes_by_base(base, fpath)
 					if classes:
 						for klass in classes:
@@ -267,7 +266,6 @@ class WordWield(metaclass=WordWieldMeta):
 			'schemas'        : cls.schemas.to_dict(cast_to_str=True),   # Or cls.schemas.to_dict()
 			'models'         : cls.models.to_dict(cast_to_str=True),    # Or cls.models.to_dict()
 			'expertise'      : cls.expertise.to_dict(cast_to_str=True), # Or cls.expertise.to_dict()
-			'test_items'     : ['foo', 'bar', 'baz']
 		}
 	
 	##########################################################################

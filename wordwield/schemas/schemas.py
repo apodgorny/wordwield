@@ -60,18 +60,27 @@ class StreamSchema(O):
 		return gulps
 
 	def write(self, values, author=None):
-		if isinstance(values, str): values = [values]
+		if isinstance(values, str):
+			values = [values]
+
+		if not isinstance(self.gulps, list):
+			self.gulps = []
+
 		for value in values:
+			if not isinstance(value, str):
+				raise ValueError(f'🛑 Cannot write non–string to stream `{self.name}`')
+
 			gulp = GulpSchema(value=str(value), author=author)
 			self.gulps.append(gulp)
 			self.save()
 			self.log(value)
+
 		return self
 	
 	def log(self, s):
 		log_path = os.path.join(ww.config.LOGS_DIR, f'{self.name}.log')
 		with open(log_path, 'a') as f:
-			f.write(f'{s}\n')
+			f.write(f'{s.strip()}\n')
 	
 	def to_list(self):
 		return [g.value for g in self.gulps]

@@ -32,7 +32,20 @@ class Model:
 			cls.model.restart_model()
 		
 	##################################################################
-		
+
+	@classmethod
+	def validate(cls, data: dict, schema: O):
+		'''
+		Filters out extra fields from data and returns an instance of schema,
+		filling with schema defaults for missing fields.
+		'''
+		field_names   = set(schema.model_fields.keys())
+		data_filtered = {k: v for k, v in data.items() if k in field_names}
+		default       = schema.to_default().to_dict()
+		default.update(data_filtered)
+		schema(**default)
+		return default
+
 	@classmethod
 	async def generate(
 		cls,
@@ -59,10 +72,7 @@ class Model:
 				temperature     = temperature,
 				system          = system
 			)
-
-			# Validate output
-			response_schema(**result)
-			return result
+			return cls.validate(result, response_schema)
 
 		except Exception as e:
 			raise WwException.consume(e)

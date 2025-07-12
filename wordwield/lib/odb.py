@@ -1,6 +1,6 @@
-from sqlalchemy                import inspect
 from sqlalchemy.orm            import Session
 from sqlalchemy.exc            import IntegrityError
+from sqlalchemy                import Column, String, Integer, Boolean, Float, inspect, text
 
 from pydantic_core             import PydanticUndefined
 
@@ -24,18 +24,19 @@ class ODB:
 			from wordwield import ww
 			o_class = ww.schemas[o_class]
 
+		ODB.ensure_columns_exist(o_class)
+
 		key = (o_class, id_or_name)
 		if key in cls.objects:
 			return cls.objects[key]
 
 		o         = None
 		orm_obj   = None
-		orm_class = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
 
 		if isinstance(id_or_name, int):
-			orm_obj = cls._load_by_id(id_or_name, orm_class)
+			orm_obj = cls._load_by_id(id_or_name, o_class.__orm_class__)
 		elif isinstance(id_or_name, str):
-			orm_obj = cls._load_by_name(id_or_name, orm_class)
+			orm_obj = cls._load_by_name(id_or_name, o_class.__orm_class__)
 
 		if orm_obj is not None:
 			data     = T(T.SQLALCHEMY_MODEL, T.DATA, orm_obj)
@@ -63,9 +64,10 @@ class ODB:
 		return orm_obj
 	
 	@classmethod
-	def exists(cls, schema, name):
-		orm_class  = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, schema)
+	def exists(cls, o_class, name):
+		orm_class  = o_class.__orm_class__
 		if not inspect(cls.session.bind).has_table(orm_class.__tablename__): return False
+		ODB.ensure_columns_exist(o_class)
 		return bool(ODB.session.query(orm_class).filter_by(name=name).first() is not None)
 
 	@classmethod
@@ -100,7 +102,7 @@ class ODB:
 
 	def __init__(self, instance: 'O'):
 		self._o          = instance
-		self._orm_class  = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, type(instance))
+		self._orm_class  = type(instance).__orm_class__
 		self._edge       = Edge(self.session)
 		self._is_deleted = False
 
@@ -174,7 +176,6 @@ class ODB:
 	def table_name(self)    : return self._orm_class.__tablename__
 	
 	def query(self)         : return self.session.query(self._orm_class)
-	def table_exists(self)  : return inspect(self.session.bind).has_table(self.table_name)
 	def create_table(self)  : self._orm_class.__table__.create(bind=self.session.bind, checkfirst=True)
 	def drop_table(self)    : self._orm_class.metadata.drop_all(self.session.bind)
 	def filter(self, *args) : return self.query().filter(*args)
@@ -254,7 +255,6 @@ class ODB:
 			elif edge.rel2 == name and edge.id2 == o.id:
 				result.append(ODB.load(edge.id1, edge.type1))
 
-		print(name)
 		field = o.model_fields.get(name)
 		if field is None:
 			raise AttributeError(f'Field `{name}` does not exist in `{o.__class__.__name__}` schema.')
@@ -275,23 +275,66 @@ class ODB:
 			return field.default if field.default is not None else None
 		
 	@classmethod
+	def table_exists(cls, table_name):
+		if cls.session is None:
+			raise RuntimeError('ODB.session is not initialized')
+		if cls.session.bind is None:
+			raise RuntimeError('ODB.session.bind is None')
+		tables = inspect(ODB.session.bind).get_table_names()
+		return table_name in tables
+		
+	@classmethod
 	def all(cls, o_class) -> dict:
 		'''
-		Load all saved instances of cls (O) into a dict, key=model.name.
+		Load all saved instances of cls (O) into a dict, key=model.name,
+		sorted by id ascending.
 		'''
-		orm_class = T(T.PYDANTIC, T.SQLALCHEMY_MODEL, o_class)
-		if not inspect(ODB.session.bind).has_table(orm_class.__tablename__):
-			return {}
-		
-		objects = {}
-		records = ODB.session.query(orm_class).all()
-		for record in records:
-			data = T(T.SQLALCHEMY_MODEL, T.DATA, record)
-			obj_id = data.pop('id', None)
-			name = data.get('name')
-			o = o_class.model_construct(**data)
-			o.__db__ = ODB(o)
-			o.__id__ = obj_id
-			objects[name] = o
-			o.db._load_edges()
-		return objects
+		items     = []
+		if o_class.has_table():
+			# Сортировка по id
+			records = (
+				ODB.session.query(o_class.__orm_class__)
+				.order_by(o_class.__orm_class__.id.asc())
+				.all()
+			)
+			for record in records:
+				data     = T(T.SQLALCHEMY_MODEL, T.DATA, record)
+				obj_id   = data.pop('id', None)
+				o        = o_class.model_construct(**data)
+				o.__db__ = ODB(o)
+				o.__id__ = obj_id
+				items.append(o)
+				o.db._load_edges()
+		return items
+	
+	@classmethod
+	def ensure_columns_exist(cls, o_class):
+		orm_cls   = o_class.__orm_class__
+		table     = orm_cls.__table__
+		bind      = cls.session.bind
+		inspector = inspect(bind)
+		columns   = {col['name'] for col in inspector.get_columns(table.name)}
+
+		for name, field in o_class.model_fields.items():
+			if name in columns:
+				continue
+
+			# Простой маппинг типов
+			tp      = field.annotation
+			coltype = (
+				String   if tp == str else
+				Integer  if tp == int else
+				Boolean  if tp == bool else
+				Float    if tp == float else
+				None
+			)
+			if coltype is None:
+				continue  # Игнорируем неподдерживаемые типы
+
+			sql = f'ALTER TABLE {table.name} ADD COLUMN {name} {coltype().compile(dialect=bind.dialect)}'
+			cls.session.execute(text(sql))
+
+		cls.session.commit()
+
+			
+

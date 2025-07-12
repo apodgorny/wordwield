@@ -15,7 +15,7 @@ from wordwield import ww
 ww.init(
 	PROJECT_NAME = PROJECT_NAME,
 	PROJECT_PATH = PROJECT_PATH,
-	reset_db     = False
+	reset_db     = True
 )
 
 ww.schemas.CharacterSchema.put(

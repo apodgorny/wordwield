@@ -20,8 +20,9 @@ ww.init(
 
 ww.schemas.StorySchema.put(
 	name  = PROJECT_NAME,
-	title = 'Мухамор',
-	genre = 'комедия'
+	title = 'Пыль',
+	genre = 'секс драма'
 )
 
-ww(ww.operators.Narrative(PROJECT_NAME)())
+# ww(ww.operators.Narrative(PROJECT_NAME)())
+ww(ww.operators.Life(PROJECT_NAME)())
