@@ -15,4 +15,9 @@ class DictExtractor(Agent):
 			fields[key] = O.Field(str, description=f'{self.field_description} `{key}`')
 
 		schema = O.schema(schema_name, **fields)
-		return await self.ask(self.fill(), schema=schema, unpack=False)
+		prompt = await self.fill()
+		return await self.ask(
+			prompt = prompt,
+			schema = schema,
+			unpack = False
+		)

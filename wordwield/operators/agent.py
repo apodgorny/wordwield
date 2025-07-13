@@ -96,11 +96,12 @@ class Agent(Operator):
 				raise ValueError(f'Object `{str(obj)[:20]}...` of type {type(obj)} must have associated key to be stored in state of `{self.name}`')
 		self.state.update(kwargs)
 	
-	def fill(self, template: str = None, **vars) -> str:
+	async def fill(self, template: str = None, **vars) -> str:
+		await self._collect_props()   # Обновляем state property прямо перед шаблоном
+
 		template = template or self.template
 		if not template:
 			raise RuntimeError(f'Template is not defined in `{self.name}`')
-		
 		try:
 			template  = String.unindent(template)
 			all_vars  = {**self.state.to_dict(), **vars, 'ww': self.ww }
@@ -112,7 +113,7 @@ class Agent(Operator):
 		return prompt
 
 	async def ask(self, prompt=None, schema=None, unpack=True, **extra_fields):
-		prompt                     = prompt or self.fill()
+		prompt                     = prompt or await self.fill()
 		schema                     = schema or self.ResponseSchema
 		instruction                = f'''\n\nPut all data into JSON, output JSON ONLY. Wrap strings in quotes, make sure JSON is valid:\n'''
 
@@ -138,7 +139,7 @@ class Agent(Operator):
 	async def write(self) : pass
 
 	async def invoke(self, *args, **kwargs):
-		prompt = self.fill(self.schema.template)
+		prompt = await self.fill(self.schema.template)
 		result = await self.ask(prompt=prompt, schema=self.response_schema)
 		await self.write()
 		return result

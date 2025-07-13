@@ -22,7 +22,8 @@ class Orchestrator(Agent):
 
 		for question in self.questions:
 			self.state.question = question
-			answer = await self.ask(self.fill(), schema=schema)
+			prompt = await self.fill()
+			answer = await self.ask(prompt=prompt, schema=schema)
 			unfoldment[question] = answer
 			self.state.unfoldment = '\n'.join(unfoldment.values())
 		return answer

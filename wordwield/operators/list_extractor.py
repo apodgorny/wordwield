@@ -9,4 +9,5 @@ class ListExtractor(Agent):
 
 	async def invoke(self, **kwargs):
 		schema = O.schema(items = O.Field(list[str], description=self.field_description))
-		return await self.ask(self.fill(), schema)
+		prompt = await self.fill()
+		return await self.ask(prompt, schema)

@@ -11,4 +11,5 @@ class TextWriter(Agent):
 		schema = O.schema(
 			value = O.Field(str, description=self.field_description)
 		)
-		return await self.ask(self.fill(), schema=schema)
+		prompt = await self.fill()
+		return await self.ask(prompt=prompt, schema=schema)

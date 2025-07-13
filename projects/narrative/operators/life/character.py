@@ -3,31 +3,51 @@ from wordwield.lib import O
 
 
 class Character(ww.operators.Unfolder):
-	cstreams = ['stream']
-	intent   = ''
+	agents = {
+		'summarizer': ww.operators.Summarizer
+	}
+
+	@property
+	async def long_memory(self):
+		conversaton = self.get_conversation()
+		summary = await self.agents.summarizer(conversaton.to_prompt())
+	
+	@property
+	async def short_memory(self):
+		return 'foo'
+	
+	def get_conversation(self):
+		stream_names = [self.character.name] + self.state.peers
+		return ww.schemas.StreamSchema.zip(stream_names)
+
 	questions = [
-		'В чем суть происходящего?',
-		'Что хорошего я вижу в происходящем? (Не длиннее одного предложения)',
-		'Что можно улучшить в моей ситуации? (Не длиннее одного предложения)',
-		'Какие варианты действий есть в моём распоряжении чтобы всё улучшить? Список где каждый элемент 2-3 слова.',
-		'Какои вариант поведения я выберу, чтобы всё улучшить? Выбираю только один из моего списка выше. 2-3 слова',
-		'Конкретное физическое действие. (Не длиннее одного предложения, в настоящем времени. Пример: я иду, я делаю или я начинаю)'
+		'Что происходит вокруг меня в данный момент? Опиши со своих глаз.',
+		'Чего я хочу добиться в этой ситуации, какова моя цель в данной ситуации? (Начни с "Я хочу..")',
+		'Какие воспоминания или опыт из прошлого сейчас важны для моего решения?',
+		'Какое действие будет самым логичным и естественным в ответ на то, что сейчас происходит?',
 	]
 	template = '''
 		Ты - живой персонаж {{ character.name }}
 
 		О тебе:
 		-------------------
-		{{ character.to_yaml() }}
+		
 		-------------------
 
-		Вот что произошло
 		-------------------
-		{{ summary }}
+		Было вот что
+		{{ long_memory }}
+		A потом:
+		{{ short_memory }}
+		И вот только что:
 		-------------------
+
+		-------------------
+		{{ unfoldment }}
+		-------------------
+
+		{{question}}
 		'''
 
-	async def invoke(self, character, scene):
-		result = await super().invoke()
-		self.streams.stream.write(result, author=character.name)
-		return result
+	async def invoke(self, character, peers):
+		return await super().invoke()
