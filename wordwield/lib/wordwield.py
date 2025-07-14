@@ -34,12 +34,12 @@ class WordWield(metaclass=WordWieldMeta):
 		Registry('schemas',   cls)
 		Registry('models',    cls)
 		Registry('expertise', cls)
-
+		
 		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)
+		cls._init_db(drop_existing=reset_db)
+
 		cls._register_builtins()
 		cls._register_project()
-
-		cls._init_db(drop_existing=reset_db)
 
 		cls.is_initialized = True
 		cls.log_success(f"Project '{PROJECT_NAME}' initialized in '{PROJECT_PATH}'")

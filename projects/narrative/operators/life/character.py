@@ -3,51 +3,31 @@ from wordwield.lib import O
 
 
 class Character(ww.operators.Unfolder):
-	agents = {
-		'summarizer': ww.operators.Summarizer
-	}
-
-	@property
-	async def long_memory(self):
-		conversaton = self.get_conversation()
-		summary = await self.agents.summarizer(conversaton.to_prompt())
-	
-	@property
-	async def short_memory(self):
-		return 'foo'
-	
-	def get_conversation(self):
-		stream_names = [self.character.name] + self.state.peers
-		return ww.schemas.StreamSchema.zip(stream_names)
-
 	questions = [
 		'Что происходит вокруг меня в данный момент? Опиши со своих глаз.',
 		'Чего я хочу добиться в этой ситуации, какова моя цель в данной ситуации? (Начни с "Я хочу..")',
-		'Какие воспоминания или опыт из прошлого сейчас важны для моего решения?',
-		'Какое действие будет самым логичным и естественным в ответ на то, что сейчас происходит?',
+		'Какое действие будет самым логичным и естественным в ответ на то, что сейчас происходит? Без вставок "от автора", без "сказал он" и пр. Только действие. 1-2 предложения.',
 	]
+	# 'Какие воспоминания или опыт из прошлого сейчас важны для моего решения?',
 	template = '''
 		Ты - живой персонаж {{ character.name }}
-
 		О тебе:
 		-------------------
-		
-		-------------------
-
+		{{ character.to_prompt() }}
 		-------------------
 		Было вот что
-		{{ long_memory }}
+		{{ summaries['long'] }}
 		A потом:
-		{{ short_memory }}
+		{{ summaries['short'] }}
 		И вот только что:
-		-------------------
-
+		{{ summaries['last'] }}
 		-------------------
 		{{ unfoldment }}
 		-------------------
 
-		{{question}}
+		{{ question }}
 		'''
 
-	async def invoke(self, character, peers):
+	async def invoke(self, name, actors, summaries):
+		self.state.character = ww.schemas.CharacterSchema.get(name)
 		return await super().invoke()

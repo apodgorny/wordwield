@@ -16,9 +16,10 @@ class GulpSchema(O):
 	
 	@classmethod
 	def on_create(cls, data):
-		data['timestamp'] = int(time())
+		if 'timestamp' not in data or data['timestamp'] is None:
+			data['timestamp'] = int(time() * 1000)
 		return data
-	
+
 	def to_prompt(self):
 		return f'{self.author}: "{self.value}"'
 
@@ -27,6 +28,12 @@ class StreamSchema(O):
 	role   : str                              = O.Field(description='Stream role', llm=False)
 	gulps  : Optional[list[GulpSchema]]       = O.Field(semantic=True, description='Ordered sequence of output values', default_factory=list, llm=False)
 	author : Optional[str | list[str]]        = O.Field(description='Name(s) of agent(s) who owns this stream')
+
+	# Magic
+	############################################################################################
+
+	def __len__(self):
+		return len(self.gulps or [])
 
 	# Private
 	############################################################################################
@@ -71,9 +78,15 @@ class StreamSchema(O):
 	def since(self, timestamp: int) -> "StreamSchema":
 		return self._gulps_to_stream([g for g in self.gulps if g.timestamp > timestamp])
 
-	def last(self, n: int) -> "StreamSchema":
-		return self._gulps_to_stream(self.gulps[-n:] if n > 0 else [])
-
+	def last(self, n: int = 1) -> "StreamSchema":
+		return self._gulps_to_stream(self.gulps[-n:] if n > 0 else self.gulps)
+	
+	def last_gulp(self):
+		gulps = self.gulps or []
+		if gulp := gulps[-1] if gulps else None:
+			gulp.author = gulp.author if gulp.author else self.author
+		return gulp
+	
 	def write(self, values, author=None):
 		if isinstance(values, str) : values = [values]
 		if author is None          : author = self.author or []
@@ -81,7 +94,7 @@ class StreamSchema(O):
 
 		authors = author if author else [self.name]
 		for a in authors:
-			stream = self.__class__.load(a)
+			stream = self if a == self.name else self.__class__.load(a)
 			if stream is None:
 				stream = self.__class__(name=a, author=a)
 			stream.gulps = stream.gulps if isinstance(stream.gulps, list) else []

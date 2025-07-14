@@ -15,7 +15,7 @@ from wordwield import ww
 ww.init(
 	PROJECT_NAME = PROJECT_NAME,
 	PROJECT_PATH = PROJECT_PATH,
-	reset_db     = False
+	reset_db     = True
 )
 
 ww.schemas.StorySchema.put(
@@ -25,4 +25,7 @@ ww.schemas.StorySchema.put(
 )
 
 # ww(ww.operators.Narrative(PROJECT_NAME)())
-ww(ww.operators.Life(PROJECT_NAME)())
+ww(ww.operators.Life(PROJECT_NAME)(
+	human  = 'Саша',
+	actors = ['Вася', 'Саша']
+))
