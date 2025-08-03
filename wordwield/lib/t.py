@@ -388,7 +388,7 @@ def type_to_prompt(tp: Any, indent: int = 0) -> str:
 
 @T.register(T.FIELD, T.PROMPT)
 def field_to_prompt(field: OField, indent: int = 0) -> str:
-	comment = f'  # {field.description}' if field.description else ''
+	comment = f'  # {' '.join(field.description.split())}' if field.description else ''
 	value   = T(T.TYPE, T.PROMPT, field.annotation, indent + 1)
 	pad     = '  ' * indent
 	return f'{pad}"{field.title}": {value}{comment}'

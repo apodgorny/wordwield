@@ -1,0 +1,46 @@
+Что нужно для персонажа:
+
+
+quadrants
+	– first
+		name       : жертва
+		guilty     : true
+		active     : false
+		resource   : жалость, забота, прощение -> освобождение от ответственности
+		verb       : позволять
+		way        : неспособность
+	– second
+		name       : служитель
+		guilty     : true
+		active     : true
+		resource   : признание стараний, навязывание своего энтузиазма - насильственное сорадование
+		verb       : давать
+		way        : способность
+	– third
+		name       : агрессор
+		guilty     : false
+		active     : true
+		resource   : разрушение, унижение, навязывание боли -> насильственное сострадание
+		way        : опасность
+		verb       : заставлять
+		trigger    : чужое страдание
+	– fourth
+		name       : пользователь
+		guilty     : false
+		active     : false
+		resource   : неуважение к страданиям -> освобождение от опасности
+		way        : безопасность
+		verb       : принимать
+		trigger    : чужая радость
+
+
+1. Define quadrant sequence
+2. Define triggers
+3. Define quadrant descriptions
+4. Possibly define interactions between quadrants
+5. Start conversation, watch for triggers
+6. When trigger – switch quadrant and start answering with new descriptions
+7. Figure out how to define specificity of reaction, possibly through focus on resource in each quadrant, 
+say for some it would be security, for some – appreciation
+
+Do it all in one on one interaction

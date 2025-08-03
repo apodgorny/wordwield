@@ -13,9 +13,10 @@ from wordwield.lib.predicates import *
 
 
 class Agent(Operator):
-	ResponseSchema  : O   = None
-	intent          : str = None      # purpose, semantic role in project
-	template        : str = None      # jinja prompt template
+	ResponseSchema  : O    = None
+	intent          : str  = None      # purpose, semantic role in project
+	template        : str  = None      # jinja prompt template
+	verbose         : bool = True
 
 	# Magic
 	######################################################################
@@ -29,7 +30,6 @@ class Agent(Operator):
 	async def __call__(self, *args, **kwargs):
 		signature = inspect.signature(self.invoke)
 		arg_names = [param.name for param in signature.parameters.values()]
-		print(arg_names)
 
 		n = 0
 		for n in range(min(len(args), len(arg_names))):
@@ -106,16 +106,18 @@ class Agent(Operator):
 			template  = String.unindent(template)
 			all_vars  = {**self.state.to_dict(), **vars, 'ww': self.ww }
 			env       = Environment(loader=BaseLoader())
+			env.globals = {'len' : len}
 			jinja     = env.from_string(template)
 			prompt    = String.unindent(jinja.render(**all_vars))
 		except Exception as e:
 			raise ValueError(f'Could not fill template in agent `{self.name}`: {str(e)}')
 		return prompt
 
-	async def ask(self, prompt=None, schema=None, unpack=True, **extra_fields):
-		prompt                     = prompt or await self.fill()
-		schema                     = schema or self.ResponseSchema
-		instruction                = f'''\n\nPut all data into JSON, output JSON ONLY. Wrap strings in quotes, make sure JSON is valid:\n'''
+	async def ask(self, prompt=None, schema=None, unpack=True, verbose=None, **extra_fields):
+		verbose     = self.verbose if verbose is None else verbose
+		prompt      = prompt or await self.fill()
+		schema      = schema or self.ResponseSchema
+		instruction = f'''\n\nPut all data into JSON, output JSON ONLY. Wrap strings in quotes, make sure JSON is valid:\n'''
 
 		if schema is None:
 			raise RuntimeError(f'No ResponseSchema is defined in agent `{self.name}`')
@@ -126,8 +128,9 @@ class Agent(Operator):
 		print(f'\n========================[ 😎 AGENT `{self.name}` ]========================\n')
 
 		partial = await self.ww.ask(
-			prompt = prompt,
-			schema = llm_schema
+			prompt  = prompt,
+			schema  = llm_schema,
+			verbose = verbose
 		)
 		full = schema(**{**partial, **extra_fields})
 		self.to_state(full)
@@ -139,7 +142,14 @@ class Agent(Operator):
 	async def write(self) : pass
 
 	async def invoke(self, *args, **kwargs):
-		prompt = await self.fill(self.schema.template)
-		result = await self.ask(prompt=prompt, schema=self.response_schema)
+		unpack = kwargs.pop('unpack') if 'unpack' in kwargs else True
+		prompt = await self.fill(self.template)
+		result = await self.ask(
+			prompt  = prompt,
+			schema  = self.ResponseSchema,
+			unpack  = unpack,
+			verbose = self.verbose
+		)
+		print(result, type(result))
 		await self.write()
 		return result

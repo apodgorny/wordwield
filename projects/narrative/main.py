@@ -29,3 +29,5 @@ ww(ww.operators.Life(PROJECT_NAME)(
 	human  = 'Саша',
 	actors = ['Вася', 'Саша']
 ))
+
+# ww(ww.operators.Characters(PROJECT_NAME)())

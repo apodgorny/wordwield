@@ -57,7 +57,8 @@ class Model:
 		model_id        : str,
 		role            : str        = 'user',
 		temperature     : float      = 0.0,
-		system          : str | None = None
+		system          : str | None = None,
+		verbose         : bool       = True
 
 	) -> dict:
 		try:
@@ -70,7 +71,8 @@ class Model:
 				response_schema = response_schema.to_jsonschema(),
 				role            = role,
 				temperature     = temperature,
-				system          = system
+				system          = system,
+				verbose         = verbose
 			)
 			return cls.validate(result, response_schema)
 

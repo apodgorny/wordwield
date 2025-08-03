@@ -1,24 +1,26 @@
-from wordwield     import ww
-from wordwield.lib import O
+from wordwield.lib       import O, Registry
+from wordwield.operators import Agent
 
 
-class Summarizer(ww.operators.Agent):
+class Summarizer(Agent):
+	verbose = True
+
 	class ResponseSchema(O):
-		text: str
+		roles       : str = O.Field(description='От первого лица, объясни кто есть кто в диалоге, опиши роли всех участников')
+		interaction : str = O.Field(description='В одно предложение охарактеризуй взаимодействие персонажей от первого лица')
+		events      : str = O.Field(description='Краткий но максимально полный пересказ текста событий текста от первого лица')
 
-	intent     = 'Сжато суммаризировать все сцены в один-два абзаца текст'
-	template   = '''
-		Ты — суммаризатор, который умеет уместить предыдущие сцены в информативный сжатый блок.
-		Твоя цель — {{intent}}
-
-		Все сцены истории:
-		{% for scene in scenes %}
-			{{ scene }}
-		{% endfor %}
-
-		ТВОЁ ЗАДАНИЕ:
-		Суммаризируй в один-два абзаца.
+	template = '''
+		Ты {{ name }}.
+		Суммаризируй события от своего лица на РУССКОМ ЯЗЫКЕ
+		Имя говорящего персонажа написано в квадратных скобках
+		-------------------
+		{{ text }}
+		-------------------
 	'''
 
-	async def invoke(self, scenes):
-		return await self.ask()
+	# Public methods
+	#########################################################################
+
+	async def invoke(self, name, text):
+		return await self.ask(unpack=False)

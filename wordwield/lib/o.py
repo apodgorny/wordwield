@@ -331,8 +331,22 @@ class O(BaseModel, metaclass=OMeta):
 				)
 		namespace['__annotations__'] = annotations
 		return type(schema_name, (cls,), namespace)
-
 	
+	@classmethod
+	def describe(cls, except_keys=None):
+		except_keys = set(except_keys or [])
+		lines = []
+		fields = [k for k in cls.model_fields if k not in except_keys]
+		for i, k in enumerate(fields):
+			field = cls.model_fields[k]
+			label = k
+			descr = field.description or ''
+			if descr and descr.endswith('.'):
+				descr = descr[:-1]
+			prefix = '-' if i == 0 else '\t-'
+			lines.append(f'{prefix} {label}: {descr}')
+		return '\n'.join(lines)
+
 	# Getters
 	############################################################################
 
@@ -349,13 +363,14 @@ class O(BaseModel, metaclass=OMeta):
 	# Public
 	############################################################################
 
-	def to_prompt(self)                 -> str  : return self.to_json()
-	def to_json(self, r=False)          -> str  : return json.dumps(self.to_dict(r, e=True), indent=4, ensure_ascii=False)
-	def to_yaml(self, r=False, e=False) -> str  : return yaml.dump(self.to_dict(r=r, e=e), allow_unicode=True, sort_keys=False)
-	def to_dict(self, r=False, e=False) -> dict : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
-	def to_tree(self)                   -> str  : return T(T.PYDANTIC, T.TREE, self)
-	def to_schema(self)                 -> type : return self.__class__
-	def unpack(self)                            : return T(T.PYDANTIC, T.ARGUMENTS, self)
+	def to_prompt(self)                 -> str       : return self.to_json()
+	def to_json(self, r=False)          -> str       : return json.dumps(self.to_dict(r, e=True), indent=4, ensure_ascii=False)
+	def to_yaml(self, r=False, e=False) -> str       : return yaml.dump(self.to_dict(r=r, e=e), allow_unicode=True, sort_keys=False)
+	def to_dict(self, r=False, e=False) -> dict      : return T(T.PYDANTIC, T.DATA, self, recursive=r, show_empty=e)
+	def to_tree(self)                   -> str       : return T(T.PYDANTIC, T.TREE, self)
+	def to_schema(self)                 -> type      : return self.__class__
+	def keys(self)                      -> list[str] : return list(self.model_fields.keys())
+	def unpack(self)                                 : return T(T.PYDANTIC, T.ARGUMENTS, self)
 
 	def to_operator(self):
 		self.assert_instanceable()

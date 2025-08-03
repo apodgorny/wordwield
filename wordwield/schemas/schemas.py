@@ -7,9 +7,9 @@ from wordwield       import ww
 
 
 class GulpSchema(O):
-	timestamp : int           = O.Field(description='Time of occurrence', llm=False, semantic=True)
-	value     : str           = O.Field(description='Output value',       llm=True,  semantic=True)
-	author    : Optional[str] = O.Field(description='Optional author',    llm=False, default=None)
+	timestamp : int = O.Field(description='Time of occurrence', llm=False, semantic=True)
+	value     : str = O.Field(description='Output value',       llm=True,  semantic=True)
+	author    : str = O.Field(description='Gulp author',        llm=False)
 
 	def __str__(self)  : return f'Gulp [{self.timestamp}] {self.author}: "{self.value}"'
 	def __repr__(self) : return str(self)
@@ -21,13 +21,14 @@ class GulpSchema(O):
 		return data
 
 	def to_prompt(self):
-		return f'{self.author}: "{self.value}"'
+		return f'[{self.author}]: "{self.value}"'
 
 class StreamSchema(O):
-	name   : str                              = O.Field(semantic=True, description='Stream name', llm=False)
-	role   : str                              = O.Field(description='Stream role', llm=False)
-	gulps  : Optional[list[GulpSchema]]       = O.Field(semantic=True, description='Ordered sequence of output values', default_factory=list, llm=False)
-	author : Optional[str | list[str]]        = O.Field(description='Name(s) of agent(s) who owns this stream')
+	name      : str              = O.Field(semantic=True, description='Stream name', llm=False)
+	role      : str              = O.Field(description='Stream role', llm=False)
+	gulps     : list[GulpSchema] = O.Field(semantic=True, description='Ordered sequence of output values', default_factory=list, llm=False)
+	author    : str              = O.Field(description='Name(s) of agent(s) who owns this stream')
+	is_zipped : bool             = False
 
 	# Magic
 	############################################################################################
@@ -38,13 +39,12 @@ class StreamSchema(O):
 	# Private
 	############################################################################################
 
-	def _gulps_to_stream(self, gulps, author=None):
-		'''Internal: return new StreamSchema with same meta but different gulps'''
+	def _gulps_to_stream(self, gulps):
 		return StreamSchema(
 			name   = self.name,
 			role   = self.role,
 			gulps  = gulps,
-			author = author if author is not None else self.author
+			author = self.author
 		)
 	
 	# Public
@@ -53,68 +53,68 @@ class StreamSchema(O):
 	@classmethod
 	def zip(cls, *names):
 		gulps   = []
-		authors = set()
-
 		for name in names:
 			if stream := cls.load(name):
-				if isinstance(stream.author, list):
-					authors.update(stream.author)
-				elif stream.author:
-					authors.add(stream.author)
 				for g in stream.gulps or []:
-					g_copy = g.clone()
-					g_copy.author = g_copy.author or stream.author
-					gulps.append(g_copy)
+					gulps.append(g.clone())
 		gulps.sort(key=lambda g: g.timestamp)
-		authors = list(authors)
 
 		return cls(
-			name   = '+'.join(names),
-			gulps  = gulps,
-			author = authors if authors else None,
-			role   = ''
+			name      = '+'.join(names),
+			gulps     = gulps,
+			author    = '+'.join(names),
+			role      = '',
+			is_zipped = True
 		)
 
-	def since(self, timestamp: int) -> "StreamSchema":
+	def since(self, timestamp: int) -> 'StreamSchema':
 		return self._gulps_to_stream([g for g in self.gulps if g.timestamp > timestamp])
 
-	def last(self, n: int = 1) -> "StreamSchema":
+	def last(self, n: int = 1) -> 'StreamSchema':
 		return self._gulps_to_stream(self.gulps[-n:] if n > 0 else self.gulps)
 	
 	def last_gulp(self):
-		gulps = self.gulps or []
-		if gulp := gulps[-1] if gulps else None:
-			gulp.author = gulp.author if gulp.author else self.author
-		return gulp
+		return self.gulps[-1] if self.gulps else None
 	
-	def write(self, values, author=None):
-		if isinstance(values, str) : values = [values]
-		if author is None          : author = self.author or []
-		if isinstance(author, str) : author = [author]
+	def since_last_author(self, author: str, inclusive: bool = True) -> 'StreamSchema':
+		'''
+		Возвращает substream, начиная с последнего появления указанного автора.
+		Если inclusive=True — с этим gulp включительно, иначе — только после.
+		Если автор не найден — возвращает пустой substream.
+		'''
+		gulps = self.gulps or []
+		idx   = next((i for i in range(len(gulps)-1, -1, -1) if gulps[i].author == author), None)
+		if idx is None:
+			return self._gulps_to_stream([])
+		return self._gulps_to_stream(gulps[idx:] if inclusive else gulps[idx+1:])
 
-		authors = author if author else [self.name]
-		for a in authors:
-			stream = self if a == self.name else self.__class__.load(a)
-			if stream is None:
-				stream = self.__class__(name=a, author=a)
-			stream.gulps = stream.gulps if isinstance(stream.gulps, list) else []
-			for value in values:
-				if not isinstance(value, str):
-					raise ValueError(f'🛑 Cannot write non–string to stream `{stream.name}`')
-				gulp = GulpSchema(value=str(value), author=a if author else None)
-				stream.gulps.append(gulp)
-				stream.save()
-				stream.log(value)
+	def write(self, values):
+		if self.is_zipped:
+			raise RuntimeError(f'🛑 Cannot write to zipped stream `{self.name}`')
+		
+		if not isinstance(self.gulps, list):
+			self.gulps = []
+		
+		values = [values] if isinstance(values, str) else values
+		self.gulps = self.gulps or []
+
+		for value in values:
+			if not isinstance(value, str):
+				raise ValueError(f'🛑 Cannot write non–string to stream `{self.name}`')
+			
+			self.gulps.append(GulpSchema(
+				value  = str(value),
+				author = self.author
+			))
+			self.save()
+			self.log(value)
+
 		return self
 
 	def read(self, limit=None, since=None):
 		stream = self
-		if since is not None:
-			stream = stream.since(since)
-		if limit is not None:
-			stream = stream.last(int(limit))
-		for g in stream.gulps:
-			g.author = g.author or stream.author
+		if since is not None : stream = stream.since(since)
+		if limit is not None : stream = stream.last(int(limit))
 		return stream.gulps
 
 	def log(self, s):

@@ -26,9 +26,10 @@ class OllamaModel(Model):
 		self,
 		prompt          : str,
 		response_schema : dict,
-		role            : str = 'user',
-		temperature     : float = 0.0,
-		system          : str | None = None
+		role            : str        = 'user',
+		temperature     : float      = 0.0,
+		system          : str | None = None,
+		verbose         : bool       = True
 	) -> dict:
 		params = {
 			'model'    : self.name,
@@ -39,9 +40,10 @@ class OllamaModel(Model):
 		if system:
 			params['messages'].insert(0, {'role': 'system', 'content': system})
 
-		print(prompt)
-		print('-' * 30)
-		print(f'✅ {self.name} response:')
+		if verbose:
+			print(prompt)
+			print('-' * 30)
+			print(f'✅ {self.name} response:')
 
 		client = AsyncClient(host=self.host)
 		full_content = ''
@@ -52,10 +54,12 @@ class OllamaModel(Model):
 			stream   = True,
 		):
 			chunk = part['message']['content']
-			print(chunk, end='', flush=True)
+			if verbose:
+				print(chunk, end='', flush=True)
 			full_content += chunk
 
-		print('\n' + '-' * 30)
+		if verbose:
+			print('\n' + '-' * 30)
 
 		safe_content = self._sanitize(full_content)
 		try:
@@ -66,7 +70,9 @@ class OllamaModel(Model):
 				try:
 					return dirtyjson.loads(match.group(1))
 				except Exception as e2:
-					print('‼️ JSON fallback parse error:', e2)
+					if verbose:
+						print('‼️ JSON fallback parse error:', e2)
 			# Логируем полный ответ и падаем
-			print('‼️ Model output parse fail, RAW:\n', safe_content)
+			if verbose:
+				print('‼️ Model output parse fail, RAW:\n', safe_content)
 			raise ValueError('No valid JSON found in model output')

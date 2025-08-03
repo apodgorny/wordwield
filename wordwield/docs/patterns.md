@@ -63,3 +63,18 @@ where each object contains pre-condition and post-condition for each iteration:
 		outcome   : str  # Definite result of scene: action, discovery or decision
 	}, ... ]
 ```
+
+### 4. *"Garbage Collector"* Pattern
+LLM's absession is to generate something until it "feels" it's exhausted itself. There is no way to command it "say nothing if ...". Often time when asked to only put open speech in quotes it will improvise and err on the side of maximalizm and add something besides open speech.
+To go with the flow, add a "garbage collector" for it to satisfy it's need to fill something out.
+
+
+```
+	Put your output into valid JSON:
+	{
+		reply   : str  # Only what you say out loud
+		comment : str  # Everything besides open speech
+	}
+```
+
+Then just ignore the comment

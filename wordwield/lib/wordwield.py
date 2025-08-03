@@ -240,16 +240,18 @@ class WordWield(metaclass=WordWieldMeta):
 		cls,
 		prompt,
 		schema,
-		model_id    = 'ollama::gemma3:4b',
-		# model_id    = 'ollama::gemma3n:e4b',
-		temperature = 0.0
+		# model_id    = 'ollama::gemma3:4b',
+		model_id    = 'ollama::gemma3n:e4b',
+		temperature = 0.0,
+		verbose = True
 	):
 		return await Model.generate(
 			ww              = cls,
 			prompt          = prompt,
 			response_schema = schema,
 			model_id        = model_id,
-			temperature     = temperature
+			temperature     = temperature,
+			verbose         = verbose
 		)
 	
 	@classmethod

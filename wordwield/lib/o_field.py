@@ -71,4 +71,5 @@ class OField(FieldInfo):
 			return self.default
 		if getattr(self, 'default_factory', None) is not None:
 			return self.default_factory()
+		
 		return None
