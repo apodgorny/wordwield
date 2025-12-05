@@ -28,8 +28,7 @@ WordWield is a builder’s playground for agentic systems: tiny, explicit, and w
 - Auto-discovery: any new `.py` under those operator/schema/model folders is picked up on next init and addressable as `ww.operators.<ns>.<Class>` (or schemas/models accordingly).
 
 ## Server vs Client
-- **Backend server (optional)**: `wordwield/web/server.py` is a minimal FastAPI app exposing `/` (HTML test) and `/ws` (echo). You can extend it to expose agent endpoints for a long-lived process that keeps heavy resources (LLM clients, embeddings, DB session) in memory.
-- **No server needed**: you can run scripts/entry points directly (e.g., `python projects/narrative/main.py`) and use agents in-process.
+- **No server bundled**: run scripts/entry points directly (e.g., `python projects/narrative/main.py`) and use agents in-process.
 - **Importing from “client” code**: frontend-ish scripts can import `from wordwield import ww` to call agents locally as long as they run Python and have access to the project files. If you need true browser FE, expose HTTP/WebSocket endpoints on the server and call them from the FE; otherwise, importing `ww` in client scripts is fine.
 
 ## Agents and Operators
@@ -94,9 +93,7 @@ WordWield is a builder’s playground for agentic systems: tiny, explicit, and w
 - Jarvis flow: orchestrator coordinates sub-agents (see `projects/jarvis/operators`).
 
 ## Running
-- Without server: `python projects/narrative/main.py` (resets DB, seeds streams, enters Life loop).
-- With server (optional, minimal echo): `PYTHONPATH=$(pwd) uvicorn wordwield.web.server:app --reload`.
-- `make run` now points to `wordwield.web.server:app` and requires `PROJECT_PATH` in `.env`.
+- Run locally: `python projects/narrative/main.py` (resets DB, seeds streams, enters Life loop).
 
 ## Importing in Client Code
 - Any Python client (script/CLI/UI layer) can `from wordwield import ww`, call `ww.init(...)`, and invoke agents locally.
@@ -108,7 +105,7 @@ WordWield is a builder’s playground for agentic systems: tiny, explicit, and w
 - Define behavior as `Agent`/`Operator` subclasses; register via project `operators/`.
 - Use Streams + Gulps to sequence dialogue/events.
 - Use `ww.ask` with ResponseSchemas to keep LLM outputs structured.
-- Run in-process for simplicity; add a server only when you need a boundary or long-lived heavy resources.
+- Run in-process for simplicity; add your own server only when you need a boundary or long-lived heavy resources.
 
 ## Little Pieces of Brilliance
 - **Registry-first boot**: `ww.init` wires all registries (config/operators/schemas/models/expertise) up front, then auto-discovers classes by base type. Drop a new agent file into `operators/` and it’s instantly addressable as `ww.operators.<ns>.<Class>`.

@@ -7,11 +7,10 @@ check:
 	echo $(PROJECT_PATH)
 
 run:
-	@if [ -z "$(PROJECT_PATH)" ]; then \
-		echo "ERROR: PROJECT_PATH is not set. Add PROJECT_PATH=<repo_root> to .env or export it before running make run."; \
-		exit 1; \
-	fi
-	clear && cd $(PROJECT_PATH) && PYTHONPATH=$(pwd) uvicorn wordwield.web.server:app --reload
+	@clear
+	@path="$${PROJECT_PATH:-$$(pwd)}"; \
+	echo "Web server removed. Run a project entrypoint directly, e.g.:"; \
+	echo "PYTHONPATH=$$path python projects/narrative/main.py"
 
 test:
 	clear && PYTHONPATH=$(PROJECT_PATH) pytest

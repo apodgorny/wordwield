@@ -8,7 +8,7 @@ from typing                    import get_origin, List, Dict
 from wordwield.lib.predicates  import is_list, is_dict
 from wordwield.lib.t           import T
 from wordwield.lib.edge        import Edge
-from wordwield.db              import EdgeRecord
+from wordwield.lib.db          import EdgeRecord
 
 
 class ODB:
@@ -337,4 +337,3 @@ class ODB:
 		cls.session.commit()
 
 			
-

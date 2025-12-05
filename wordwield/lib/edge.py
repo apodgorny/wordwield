@@ -2,7 +2,7 @@ from typing import Any
 
 from sqlalchemy import and_
 
-from wordwield.db import EdgeRecord
+from wordwield.lib.db import EdgeRecord
 
 
 class Edge:
