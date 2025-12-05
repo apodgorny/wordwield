@@ -1,0 +1,30 @@
+#!make
+include .env
+
+.PHONY: start clear test apitest check install reinstall
+
+check:
+	echo $(PROJECT_PATH)
+
+run:
+	@if [ -z "$(PROJECT_PATH)" ]; then \
+		echo "ERROR: PROJECT_PATH is not set. Add PROJECT_PATH=<repo_root> to .env or export it before running make run."; \
+		exit 1; \
+	fi
+	clear && cd $(PROJECT_PATH) && PYTHONPATH=$(pwd) uvicorn wordwield.web.server:app --reload
+
+test:
+	clear && PYTHONPATH=$(PROJECT_PATH) pytest
+
+apitest:
+	clear && schemathesis run http://127.0.0.1:8000/openapi.json --base-url=http://localhost:8000 --experimental=openapi-3.1 || true && rm "$(PROJECT_PATH)/dapi.db"
+
+clear:
+	rm "$(PROJECT_PATH)/dapi.db" && echo "Cleared database"
+
+install:
+	pip install -e .
+
+reinstall:
+	pip uninstall -y wordwield || true
+	pip install -e .
