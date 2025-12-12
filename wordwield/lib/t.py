@@ -6,11 +6,11 @@ from pydantic_core   import PydanticUndefined
 from sqlalchemy      import Table, Column, MetaData, Integer, String, JSON, text
 from sqlalchemy.orm  import declarative_base
 
-from .predicates  import is_atomic_dict, is_atomic_list, is_pydantic, is_pydantic_class, is_excluded_type, is_atomic
-from .transform   import T
-from .string      import String as S
-from .record      import Record
-from .o_field     import OField
+from .predicates            import is_atomic_dict, is_atomic_list, is_pydantic, is_pydantic_class, is_excluded_type, is_atomic
+from .transform             import T
+from .string                import String as S
+from wordwield.lib.base.record import Record
+from .o_field               import OField
 
 
 T.PYDANTIC(BaseModel)

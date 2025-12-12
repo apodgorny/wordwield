@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re, unicodedata
 
 
@@ -215,7 +217,5 @@ class String:
 			result.append(String.RESET)
 
 		return ''.join(result)
-
-
 
 

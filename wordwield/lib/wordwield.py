@@ -1,9 +1,11 @@
 import os, sys, asyncio, shutil, yaml
 from dotenv import dotenv_values
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from wordwield.lib.record import Base
+from sqlalchemy                  import create_engine, inspect, text
+from sqlalchemy.orm              import sessionmaker
+from wordwield.lib.base.record   import Base, Record
+from wordwield.lib.base          import Service
+from wordwield.lib.fs            import Directory, File
 
 from wordwield.lib import (
 	Operator,
@@ -13,54 +15,89 @@ from wordwield.lib import (
 	Model,
 	Registry,
 	ClassRegistryItem,
-	TextRegistryItem
+	TextRegistryItem,
+	String
 )
 
 # Runs coroutines synchronously so `ww(...)` executes without explicit await.
+# ------------------------------------------------------------------
 class WordWieldMeta(type):
 	def __call__(cls, coroutine, *args, **kwargs):
 		return asyncio.run(coroutine)
 
+# ------------------------------------------------------------------
 class WordWield(metaclass=WordWieldMeta):
 	verbose        = True
 	is_initialized = False
 	operators      = None
 	schemas        = None
 	models         = None
+	env            = None
 
+	# Initialize WordWield framework for given project.
+	# ------------------------------------------------------------------
 	@classmethod
-	def init(cls, PROJECT_NAME, PROJECT_PATH, reset_db=True):
+	def init(cls, PROJECT_NAME, PROJECT_PATH, reset_db=True, verbose=True):
+		cls.verbose = verbose
 		# Create top-level registries on the WordWield singleton.
+		Registry('env',       cls)
 		Registry('config',    cls)
 		Registry('operators', cls)
 		Registry('schemas',   cls)
 		Registry('models',    cls)
 		Registry('expertise', cls)
+		Registry('services',  cls)
+
+		# Load environment variables from root and project .env into env registry.
+		cls._setup_env(PROJECT_NAME, PROJECT_PATH)
 		
 		# Resolve paths, prepare DB, and load built-in + project classes.
 		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)
-		cls._init_db(drop_existing=reset_db)
 
 		cls._register_builtins()
 		cls._register_project()
 
+		cls._init_db(drop_existing=reset_db)
+		cls._init_services()
+
 		cls.is_initialized = True
 		cls.log_success(f"Project '{PROJECT_NAME}' initialized in '{PROJECT_PATH}'")
-		cls.log_success(T(T.DATA, T.TREE, cls.to_dict(), f'Project `{cls.config.PROJECT_NAME}`', color=True))
+		cls.log(T(T.DATA, T.TREE, cls.to_dict(), f'Project `{cls.config.PROJECT_NAME}`', color=True))
 
+	# Load environment from WordWield root .env with project .env overrides.
+	# ------------------------------------------------------------------
+	@classmethod
+	def _setup_env(cls, project_name, project_path):
+		# Load env files in priority order: repo root → wordwield/ → project
+		lib_root       = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+		repo_root_env  = os.path.abspath(os.path.join(lib_root, '..', '.env'))
+		lib_env_path   = os.path.join(lib_root, '.env')
+		project_env    = os.path.join(project_path, '.env')
+
+		env = {}
+		for path in (repo_root_env, lib_env_path, project_env):
+			if os.path.isfile(path):
+				env.update({k: v for k, v in dotenv_values(path).items() if v is not None})
+
+		# Apply defaults then update env registry
+		if not env.get('DB_NAME'):
+			env['DB_NAME'] = project_name
+		cls.env.update(env)
+
+	# Setup key project paths into config registry.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _setup_paths(cls, PROJECT_NAME, PROJECT_PATH):
 		# Persist key paths so registries and DB know where to read/write.
-		cls.config['PROJECT_NAME'] = PROJECT_NAME
-		cls.config['PROJECT_PATH'] = PROJECT_PATH
+		cls.config['PROJECT_NAME']       = PROJECT_NAME
+		cls.config['PROJECT_PATH']       = PROJECT_PATH
+		cls.config['EXPERTISE_FILE_EXT'] = File.READABLE_FILE_EXT
 
 		# Framework root (built-in operators/schemas/models live here).
 		cls.config['WW_PATH'] = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-		# Optional lib-local .env can override DB name or directory names.
-		env = dotenv_values(os.path.join(os.path.dirname(__file__), '.env'))
 
 		# Compute DB file path inside the project dir.
-		db_name = env.get('DB_NAME', PROJECT_NAME)
+		db_name = cls.env.get('DB_NAME', PROJECT_NAME)
 		db_file = os.path.abspath(os.path.join(PROJECT_PATH, f'{db_name}.db'))
 		cls.config['DB_PATH'] = db_file
 
@@ -73,7 +110,7 @@ class WordWield(metaclass=WordWieldMeta):
 			('EXPERTISE_DIR', 'expertise'),
 		]
 		for key, default in dir_vars:
-			dir_name = env.get(key, default)
+			dir_name = cls.env.get(key, default)
 			abs_path = os.path.join(PROJECT_PATH, dir_name)
 			os.makedirs(abs_path, exist_ok=True)
 			cls.config[key] = abs_path
@@ -82,24 +119,32 @@ class WordWield(metaclass=WordWieldMeta):
 		shutil.rmtree(cls.config.LOGS_DIR)
 		os.makedirs(cls.config.LOGS_DIR, exist_ok=True)
 
+	# Register all built-in classes into registries.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _register_builtins(cls):
 		# Walk the framework-provided packages and register any subclasses of the expected bases.
-		cls._register_class(os.path.join(cls.config['WW_PATH'], 'schemas'),   cls.schemas,   O)
-		cls._register_class(os.path.join(cls.config['WW_PATH'], 'operators'), cls.operators, Operator)
-		cls._register_class(os.path.join(cls.config['WW_PATH'], 'models'),    cls.models,    Model)
+		cls._register_class(os.path.join(cls.config.WW_PATH, 'schemas'),   cls.schemas,   O)
+		cls._register_class(os.path.join(cls.config.WW_PATH, 'operators'), cls.operators, Operator)
+		cls._register_class(os.path.join(cls.config.WW_PATH, 'models'),    cls.models,    Model)
+		cls._register_class(os.path.join(cls.config.WW_PATH, 'services'),  cls.services,  Service)
 
+	# Register all project-specific classes into registries.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _register_project(cls):
 		# Walk the project packages and register subclasses alongside their namespaces.
-		cls._register_class(cls.config['SCHEMAS_DIR'],   cls.schemas,   O,        cls.config['PROJECT_NAME'])
-		cls._register_class(cls.config['OPERATORS_DIR'], cls.operators, Operator, cls.config['PROJECT_NAME'])
-		cls._register_class(cls.config['MODELS_DIR'],    cls.models,    Model,    cls.config['PROJECT_NAME'])
-		cls._register_expertise(cls.config['EXPERTISE_DIR'], cls.expertise)
+		cls._register_class(cls.config.SCHEMAS_DIR,   cls.schemas,   O,        cls.config.PROJECT_NAME)
+		cls._register_class(cls.config.OPERATORS_DIR, cls.operators, Operator, cls.config.PROJECT_NAME)
+		cls._register_class(cls.config.MODELS_DIR,    cls.models,    Model,    cls.config.PROJECT_NAME)
 
+		 # Load expertise files into the expertise registry.
+		cls._register_expertise(cls.config.EXPERTISE_DIR, cls.expertise)
+
+	# Compile list of Python files to inspect for subclasses.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _compile_import_file_list(cls, package_path, registry, base_class, origin='wordwield'):
-		# Collect Python files to inspect for subclasses we want to register.
 		import_list  = []
 		package_path = os.path.abspath(package_path)
 
@@ -125,23 +170,28 @@ class WordWield(metaclass=WordWieldMeta):
 				import_list.extend(cls._compile_import_file_list(subdir, subreg, base_class, origin))
 		return import_list
 	
+	# Register expertise files from given path into given registry.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _register_expertise(cls, path, reg):
-		# Recursively load text/markdown files into the expertise registry tree.
-		for entry in os.listdir(path):
-			file_path = os.path.join(path, entry)
-			if os.path.isdir(file_path):
-				reg = reg.subregistry(entry)
-				cls._register_expertise(file_path, entry)
-			elif entry.endswith('.md') or entry.endswith('.txt'):
-				name = os.path.splitext(entry)[0]
-				with open(file_path, 'r', encoding='utf-8') as f:
-					content = f.read()
-				reg[os.path.splitext(entry)[0]] = TextRegistryItem(content)
+		def on_subdirectory(d):
+			subreg = reg.subregistry(d.name)
+			cls._register_expertise(d.path, subreg)
 
+		def on_file(f):
+			reg[f.prefix] = TextRegistryItem(f.read())
+
+		Directory(path).walk(
+			on_subdirectory = on_subdirectory,
+			on_file         = on_file,
+			extensions      = cls.config.EXPERTISE_FILE_EXT,
+			recursive       = False
+		)
+
+	# Register all classes found in package path into given registry.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _register_class(cls, package_path, registry, base_class, origin='wordwield'):
-		# Import modules and register every class that subclasses the expected base.
 		file_list = cls._compile_import_file_list(package_path, registry, base_class, origin)
 		remaining = list(file_list)
 		n_passes = 0
@@ -171,13 +221,21 @@ class WordWield(metaclass=WordWieldMeta):
 					remaining.append(item)
 			if not progress:
 				raise error
+			
+	# Initialize all registered services
+	# ------------------------------------------------------------------
+	@classmethod
+	def _init_services(cls):
+		for name, service in cls.services.items():
+			cls.log_info(f'Initializing service: `{name}`')
+			service()
+		cls.log_success(f'Services initialized')
 
+	# Initialize or reset DB engine/session and create all tables.
+	# If drop_existing is True, drop all tables but do NOT delete the db file.
+	# ------------------------------------------------------------------
 	@classmethod
 	def _init_db(cls, drop_existing=False):
-		'''
-		Initialize or reset DB engine/session and create all tables.
-		If drop_existing is True, drop all tables but do NOT delete the file.
-		'''
 		db_path = cls.config.get('DB_PATH') or cls.config.get('DB_FILE')
 		db_url  = f'sqlite:///{db_path}'
 
@@ -193,12 +251,12 @@ class WordWield(metaclass=WordWieldMeta):
 
 		cls.engine = engine
 		cls.db     = session
+		Record.session = session
 		O.enable_persistence(session)
 		O.enable_instantiation(cls.get_operator_class)
 
 		if drop_existing:
 			# --- Drop all tables, but do NOT remove the file ---
-			from sqlalchemy import inspect, text
 			inspector = inspect(engine)
 			with engine.begin() as conn:
 				for table_name in inspector.get_table_names():
@@ -209,6 +267,8 @@ class WordWield(metaclass=WordWieldMeta):
 		Base.metadata.create_all(bind=engine)
 		cls.log_success(f'Database initialized at {db_path}')
 
+	# Resolve operator class from registry path.
+	# ------------------------------------------------------------------
 	@classmethod
 	def get_operator_class(cls, path: str):
 		'''
@@ -229,48 +289,42 @@ class WordWield(metaclass=WordWieldMeta):
 
 		return operator_class
 
+	# Logging utilities
+	# ------------------------------------------------------------------
 	@classmethod
-	def log(cls, msg, color=''):
-		print(msg, flush=True)
-
+	def log(cls, msg, color='') : print(msg, flush=True)
 	@classmethod
-	def log_success(cls, msg):
-		print(f"\033[92mSUCCESS:\033[0m {msg}", flush=True)
-
+	def log_success(cls, msg)   : print(String.color(f'SUCCESS:', String.GREEN, 'b'),  msg, flush=True)
 	@classmethod
-	def log_info(cls, msg):
-		print(f"\033[96mINFO:\033[0m {msg}", flush=True)
-
+	def log_info(cls, msg)      : print(String.color(f'INFO:   ', String.CYAN, 'b'),      msg, flush=True)
 	@classmethod
-	def log_error(cls, msg):
-		print(f"\033[91mERROR:\033[0m {msg}", flush=True)
-		# exit(0)
-		raise RuntimeError(msg)
+	def log_warning(cls, msg)   : print(String.color(f'WARNING:', String.YELLOW, 'b'), msg, flush=True)
+	@classmethod
+	def log_error(cls, msg)     : print(String.color(f'ERROR:  ', String.RED, 'b'),      msg, flush=True); raise RuntimeError(msg)
 	
-	@classmethod
-	def log_warning(cls, msg):
-		print(f"\033[93mWARNING:\033[0m {msg}", flush=True)
-	
+	# Central LLM call with schema validation.
+	# ------------------------------------------------------------------
 	@classmethod
 	async def ask(
 		cls,
 		prompt,
 		schema,
-		# model_id    = 'ollama::gemma3:4b',
-		model_id    = 'ollama::gemma3n:e4b',
+		model_id    = 'ollama::gemma3:4b',
+		# model_id    = 'ollama::gemma3n:e4b',
 		temperature = 0.0,
-		verbose = True
+		verbose = None
 	):
-		# Central LLM call: delegate to the selected Model backend with schema validation.
 		return await Model.generate(
 			ww              = cls,
 			prompt          = prompt,
 			response_schema = schema,
 			model_id        = model_id,
 			temperature     = temperature,
-			verbose         = verbose
+			verbose         = cls.verbose if verbose is None else verbose,
 		)
 	
+	# Export current framework state as dictionary.
+	# ------------------------------------------------------------------
 	@classmethod
 	def to_dict(cls):
 		'''
@@ -279,56 +333,16 @@ class WordWield(metaclass=WordWieldMeta):
 		'''
 		return {
 			'config'         : cls.config.to_dict(cast_to_str=True),
+			'env'            : cls.env.to_dict(cast_to_str=True), # Or cls.operators.to_dict() in the future
 			'is_initialized' : cls.is_initialized,
 			'verbose'        : cls.verbose,
 			'operators'      : cls.operators.to_dict(cast_to_str=True), # Or cls.operators.to_dict() in the future
 			'schemas'        : cls.schemas.to_dict(cast_to_str=True),   # Or cls.schemas.to_dict()
+			'services'       : cls.services.to_dict(cast_to_str=True),  # Or cls.services.to_dict()
 			'models'         : cls.models.to_dict(cast_to_str=True),    # Or cls.models.to_dict()
 			'expertise'      : cls.expertise.to_dict(cast_to_str=True), # Or cls.expertise.to_dict()
 		}
 	
 	##########################################################################
-
-	@classmethod
-	def from_yaml(cls, path):
-		# Populate DB schemas from a YAML project spec.
-		with open(path, 'r') as f:
-			cfg = yaml.safe_load(f)
-
-		project = cfg['project']
-		streams = project.get('streams', [])
-		agents  = project.get('agents',  [])
-
-		# Collect names for lists
-		stream_names = [s['name'] for s in streams]
-		agent_names  = [a['name'] for a in agents]
-
-		# Save ProjectSchema
-		cls.schemas.ProjectSchema(
-			name        = project['name'],
-			intent      = project['intent'],
-			description = project.get('description', ''),
-			manager     = project.get('manager', agent_names[0]),
-			agents      = agent_names,
-			streams     = stream_names,
-		).save()
-
-		# Save StreamSchemas
-		for stream in streams:
-			cls.schemas.StreamSchema(
-				name   = stream['name'],
-				role   = stream['role'],
-				author = stream['author']
-			).save()
-
-		# Save AgentSchemas
-		for agent in agents:
-			cls.schemas.AgentSchema(
-				name            = agent['name'],
-				class_name      = agent['class_name'],
-				intent          = agent['intent'],
-				response_schema = agent['response_schema'],
-				template        = agent['template'],
-			).save()
 
 	

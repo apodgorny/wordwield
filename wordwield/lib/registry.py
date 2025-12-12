@@ -13,6 +13,7 @@ class RegistryItem:
 	def __repr__(self):
 		return str(self)
 	
+
 class TextRegistryItem(RegistryItem):
 	def __str__(self):
 		line_count = len(self.value.splitlines())
@@ -20,6 +21,7 @@ class TextRegistryItem(RegistryItem):
 
 	def __repr__(self):
 		return str(self)
+
 
 class ClassRegistryItem(RegistryItem):
 	def __str__(self):
@@ -44,13 +46,6 @@ class Registry:
 		self._items          = {}
 		self._ns             = ns
 
-	def subregistry(self, name):
-		ns = f'{self._ns}.{name}' if self._ns else name
-		reg = Registry(ns)
-		self._items[name] = reg
-		reg._ns = ns
-		return reg
-	
 	def __getitem__(self, name):
 		# Dotted notation
 		if '.' in name:
@@ -71,7 +66,6 @@ class Registry:
 				return self._items[name].value
 			return self._items[name]
 		raise AttributeError(f'Registry `ww.{self._ns}` has no item `{name}`')
-
 
 	def __getitem__(self, name):
 		if name in self._items:
@@ -109,6 +103,17 @@ class Registry:
 
 	def __str__(self):
 		return T(T.DATA, T.TREE, self.to_dict())
+	
+	# ==========================================================
+	# PUBLIC METHODS
+	# ==========================================================
+	
+	def subregistry(self, name):
+		ns = f'{self._ns}.{name}' if self._ns else name
+		reg = Registry(ns)
+		self._items[name] = reg
+		reg._ns = ns
+		return reg
 
 	def get(self, name, default=None):
 		if name in self._items:
@@ -134,11 +139,25 @@ class Registry:
 		for k in d:
 			self[k] = d[k]
 
-	def to_dict(self, cast_to_str=False):
+	def to_dict(self, cast_to_str=False, sort=1, sort_by_key=True):
 		result = {}
-		for k, item in self._items.items():
+		items = list(self._items.items())
+
+		if sort != 0:
+			reverse = sort < 0
+			def key_func(pair):
+				k, item = pair
+				if sort_by_key:
+					return k
+				try:
+					return str(item) if cast_to_str else item
+				except Exception:
+					return str(item)
+			items.sort(key=key_func, reverse=reverse)
+
+		for k, item in items:
 			if isinstance(item, Registry):
-				result[k] = item.to_dict(cast_to_str=cast_to_str)
+				result[k] = item.to_dict(cast_to_str=cast_to_str, sort=sort, sort_by_key=sort_by_key)
 			else:
 				if cast_to_str:
 					result[k] = str(item)

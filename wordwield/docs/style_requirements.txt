@@ -1,0 +1,39 @@
+Tabs for indentation; no multi-tab nesting in signatures, calls, lists, or dicts.
+Single quotes only (including docstrings).
+Avoid `continue` statements in loops.
+Prefer a single return per function.
+Maintain correct indentation.
+Align grouped imports and assignments vertically with at least one space around operators and after keywords.
+For dicts/kwargs with multiple `=` entries, align the `=` vertically.
+Inside output statements when mentioning code elements, wrap code elements in backticks.
+Single line comments appear to the right of code, with at least two spaces before the `#` and arranged in a column.
+Always a space after `#` in comments, including separator lines.
+No trailing whitespace.
+Imports are grouped into standard library, third-party, and local application/library sections, each separated by a blank line.
+Two lines before class definitions and after imports; one line before method definitions.
+Each method (except __init__) is preceded by a comment block consisting of two lines:
+  - A capitalized descriptive line starting with the method's purpose.
+  - A separator line of one space and 70 hyphens.
+Except __init__, every method must include the two-line comment block above.
+__init__ methods must not have the two-line comment block.
+After imports, insert exactly two blank lines before the first class or function.
+Between methods inside a class, insert exactly one blank line.
+Never use more than one consecutive blank line elsewhere (except the required two before the first class/function).
+Class methods arranged in the following order:
+  - Initializer, magic methods
+  - Private methods
+  - Public methods
+Private and Public method groups are preceded by three line comments of:
+  - A line of one space and 70 equal signs
+  - A descriptive line starting with "PRIVATE" or "PUBLIC"
+  - A line of one space and 70 equal signs
+Each file ends with a newline.
+Each python file starts with a comment block:
+  - A separator line of one space and 70 equal signs.
+  - A brief description of the file's purpose, inner functional.
+  - A separator line of one space and 70 equal signs.
+
+Always a space after '#' in comments. Even in separator lines.
+Each comment starts with a capitalized letter.
+Only one empty line between functions and methods. Not more, not less.
+Two empty lines between classes. Not more, not less.

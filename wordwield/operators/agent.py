@@ -125,7 +125,8 @@ class Agent(Operator):
 		llm_schema, non_llm_schema = schema.split('llm')
 		prompt                    += instruction + llm_schema.to_schema_prompt()
 
-		print(f'\n========================[ 😎 AGENT `{self.name}` ]========================\n')
+		if verbose:
+			print(f'\n========================[ 😎 AGENT `{self.name}` ]========================\n')
 
 		partial = await self.ww.ask(
 			prompt  = prompt,

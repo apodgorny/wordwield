@@ -1,4 +1,6 @@
 # Repo–related
+*.db
+*.pt
 .code-workspace
 projects/*
 !projects/hello_wordwield/
