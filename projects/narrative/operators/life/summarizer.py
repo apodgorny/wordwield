@@ -1,4 +1,4 @@
-from wordwield.lib       import O, Registry
+from wordwield.core import O, Registry
 from wordwield.operators import Agent
 
 

@@ -1,4 +1,4 @@
-from wordwield.lib.o import O
+from wordwield.core.o import O
 from typing import Optional
 
 

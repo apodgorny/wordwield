@@ -1,4 +1,4 @@
-from wordwield.lib import O
+from wordwield.core import O
 from wordwield import ww
 
 

@@ -1,5 +1,5 @@
 from wordwield import ww
-from wordwield.lib.model import Model
+from wordwield.core.model import Model
 
 
 class Narrative(ww.operators.Agent):

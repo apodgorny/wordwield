@@ -2,7 +2,7 @@ import json
 import asyncio
 from openai import OpenAI
 
-from wordwield.lib import Model
+from wordwield.core import Model
 
 
 class OpenaiModel(Model):

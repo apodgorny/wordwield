@@ -1,6 +1,6 @@
 import re, json, codecs, asyncio, ollama, subprocess, time
 
-from wordwield.lib import Model
+from wordwield.core import Model
 
 
 class OllamaModel(Model):

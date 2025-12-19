@@ -1,7 +1,7 @@
 import json, dirtyjson
 import re
 from ollama import AsyncClient
-from wordwield.lib import Model
+from wordwield.core import Model
 
 class OllamaModel(Model):
 	def __init__(self, name: str, host: str = 'http://localhost:11434'):

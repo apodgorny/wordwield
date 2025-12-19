@@ -10,5 +10,6 @@ Under the following terms:
 - Attribution — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
 - You must give credit to: **Alexander Podgorny** as the original author.
 - You must retain the name “WordWield” when referring to the architecture, system, or its components.
+– You connect with me on LinkedIn and send a "Thank you for WordWield" message :) (https://www.linkedin.com/in/podgorny/)
 
 License details: https://creativecommons.org/licenses/by/4.0/

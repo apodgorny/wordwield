@@ -12,7 +12,7 @@ ww.init(PROJECT_NAME="demo", PROJECT_PATH=PROJECT_PATH, reset_db=True)
 ## O: schema + DB + prompt schema
 ```python
 from wordwield import ww
-from wordwield.lib import O
+from wordwield.core     import O
 
 class Note(O):
     title: str
@@ -27,7 +27,7 @@ print(note.to_schema_prompt())  # Prompt-friendly schema text
 ## Agent with schema-validated output
 ```python
 from wordwield import ww
-from wordwield.lib import O
+from wordwield.core     import O
 
 class ReplySchema(O):
     answer: str = O.Field(description="Concise reply")
@@ -75,7 +75,7 @@ print(Parent()(text="WordWield auto-wires agents."))
 ## Model routing (switch providers per call)
 ```python
 from wordwield import ww
-from wordwield.lib import O
+from wordwield.core     import O
 
 class EchoSchema(O):
     message: str
@@ -99,7 +99,7 @@ print(ww.expertise.domain.topic) # Access text from expertise/domain/topic.md
 
 ## Vector DB wrapper (Chroma + embeddings)
 ```python
-from wordwield.lib.vdb import VDB
+from wordwield.core.vdb import VDB
 
 vdb = VDB(collection_name="memory")
 vdb.set("SaaS marketing trends", meta={"tag": "marketing"})

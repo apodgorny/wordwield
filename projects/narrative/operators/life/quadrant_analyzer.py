@@ -1,5 +1,5 @@
 from wordwield     import ww
-from wordwield.lib import O
+from wordwield.core import O
 
 
 class QuadrantAnalyzer(ww.operators.Agent):

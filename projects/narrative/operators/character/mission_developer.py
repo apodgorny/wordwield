@@ -1,4 +1,4 @@
-from wordwield.lib import O, Operator, String
+from wordwield.core import O, Operator, String
 from wordwield     import ww
 
 

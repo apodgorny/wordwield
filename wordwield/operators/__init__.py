@@ -1,2 +1,2 @@
-# from .project import Project
-from .agent   import Agent
+# Export Agent from shared base location
+from wordwield.core.base.agent import Agent

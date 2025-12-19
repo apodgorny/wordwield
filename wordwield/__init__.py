@@ -1,3 +1,3 @@
-from wordwield.lib.wordwield import WordWield as ww
-from wordwield.lib.wordwield import WordWield
-from wordwield.lib           import O, Registry
+from wordwield.core.wordwield import WordWield as ww
+from wordwield.core.wordwield import WordWield
+from wordwield.core           import O, Registry

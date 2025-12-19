@@ -2,7 +2,7 @@ import os
 from time import time
 
 from typing          import Optional
-from wordwield.lib.o import O
+from wordwield.core.o import O
 from wordwield       import ww
 
 
