@@ -22,10 +22,6 @@ class Agent(Operator):
 	template        : str  = None                       # Jinja prompt template
 	verbose         : bool = True                       # Verbose LLM output flag
 
-	# ======================================================================
-	# MAGIC METHODS
-	# ======================================================================
-
 	# Initialize agent instance and registries
 	# ----------------------------------------------------------------------
 	def __init__(self, name=None):

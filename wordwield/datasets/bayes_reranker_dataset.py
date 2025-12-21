@@ -49,8 +49,8 @@ class BayesRerankerDataset:
 
 	# ----------------------------------------------------------------------
 	def _load_page_chunks(self, url):
-		html = ww.services.WebSiteService.load(url)
-		text = ww.services.WebSiteService.extract_text(html)
+		html = ww.services.WebsiteService.load(url)
+		text = ww.services.WebsiteService.extract_text(html)
 
 		return self._split_chunks(text) if text else []
 

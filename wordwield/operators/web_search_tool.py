@@ -12,15 +12,6 @@ class WebSearchTool(Tool):
 	verbose  = False                                   # Disable verbose output
 
 	# ==========================================================================================
-	# PRIVATE METHODS
-	# ==========================================================================================
-
-	# Generate deterministic rag domain name from intent
-	# ------------------------------------------------------------------------------------------
-	def _get_domain_id(self, query):
-		return f'web_search_{abs(hash(query))}'
-
-	# ==========================================================================================
 	# PUBLIC METHODS
 	# ==========================================================================================
 
@@ -33,13 +24,11 @@ class WebSearchTool(Tool):
 		time_range       : tuple[int, int]  = None   # (from_ts, to_ts) unix timestamps
 	) -> list[str]:
 		
-		domain = self._get_domain_id(query)
-
-		relevant_chunks = ww.services.WebSearchService.search(
-			query     = query,
-			domain    = domain,
-			k_results = k_results,
-			k_chunks  = k_chunks
+		relevant_chunks = await ww.services.WebSearchService.search(
+			query      = query,
+			k_results  = k_results,
+			k_chunks   = k_chunks,
+			time_range = time_range
 		)
 
 		return relevant_chunks

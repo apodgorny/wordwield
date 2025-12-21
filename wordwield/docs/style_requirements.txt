@@ -25,7 +25,7 @@ Class methods arranged in the following order:
   - Public methods
 Private and Public method groups are preceded by three line comments of:
   - A line of one space and 70 equal signs
-  - A descriptive line starting with "PRIVATE" or "PUBLIC"
+  - A descriptive line starting with "PRIVATE" or "PUBLIC" (NEVER DO "MAGIC METHODS", just skip)
   - A line of one space and 70 equal signs
 Each file ends with a newline.
 Each python file starts with a comment block:
@@ -57,3 +57,4 @@ Each method must be dedicated to a CLEAR and SINGLE purpose.
 If name needs to have more than 3 words in description or should contain expression like "or" or "if" – method must be refactored or unnecessary.
 
 
+NEVER USE NAMES: util, utils, payload, temp, helper, func.

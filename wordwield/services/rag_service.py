@@ -2,6 +2,8 @@
 # RAG orchestration: DB CRUD, chunking, and FAISS sync.
 # ======================================================================
 
+from time import time
+
 import numpy as np
 
 from tqdm                       import tqdm
@@ -36,13 +38,44 @@ class RagService(Service):
 			record_ids  = RagDocument.get_ids_by_keys(domain, keys)
 		return record_ids
 	
-	def _print_scores(self, texts, bayes_scores, li_scores, effective):
-		print('––– Bayes > 0 chunks –––')
-
+	def _viz_scores(self, texts, bayes_scores, li_scores, effective):
 		for text, b, l, e in zip(texts, bayes_scores, li_scores, effective):
 				print(f'[bayes={b:.6f}, li={l:.6f}, effective={e:.6f}]')
 				print(text.strip())
 				print('––––––––––––––––––')
+
+		frame = Viz.Frame(
+			Viz.Series(
+				name  = 'bayes',
+				data  = [float(x) for x in bayes_scores],
+				color = '#ff5555',
+				units = 'score',
+				dots  = False
+			),
+			Viz.Series(
+				name  = 'li',
+				data  = [float(x) for x in li_scores],
+				color = '#55ff55',
+				units = 'score',
+				dots  = False
+			),
+			Viz.Series(
+				name  = 'effective',
+				data  = [float(x) for x in effective],
+				color = '#55aaff',
+				units = 'score',
+				dots  = False
+			),
+			Viz.Info(
+				name = 'text',
+				data = [t.strip() for t in texts]
+			),
+		)
+
+		Viz.render(
+			view = 'plot',
+			data = frame
+		)
 
 	
 	# Detect ridges
@@ -87,19 +120,12 @@ class RagService(Service):
 			# --------------------------------------------------
 			effective = li_norm * bayes_prior
 
-			self._print_scores(
+			self._viz_scores(
 				texts        = texts,
 				bayes_scores = bayes_scores,
 				li_scores    = li_scores,
 				effective    = effective
 			)
-
-			# --------------------------------------------------
-			# 5. Diagnostics (optional but useful)
-			# --------------------------------------------------
-			Viz.histogram(bayes,     title='Bayes Scores')
-			Viz.histogram(li_norm,   title='LI (normalized)')
-			Viz.histogram(effective, title='Effective LI | Bayes')
 
 			exit()
 
@@ -167,21 +193,37 @@ class RagService(Service):
 
 	# Add or update a document and chunks
 	# ----------------------------------------------------------------------
-	def add(self, domain, key, text, external_mtime):
-		is_added = False
-		doc      = RagDocument.get_by_domain_and_key(domain, key)
+	def add(self, domain, key, text, external_mtime, commit=True):
+		success = False
+		doc     = RagDocument.get_by_domain_and_key(domain, key)
 
 		if doc is None:
 			doc = RagDocument(domain=domain, key=key, mtime=external_mtime).add()
 			self._create_chunks_for_document(domain, doc.id, text, key)
-			is_added = True
+			success = True
 		else:
 			if external_mtime > doc.mtime:
 				doc.mtime = external_mtime
 				self._reindex(domain, doc.id, text, key)
-				is_added = True
+				success = True
 
-		return is_added
+		if success and commit: self.ww.db.commit()
+		return success
+	
+	# Add many results in one transaction
+	# ----------------------------------------------------------------------
+	def add_many(self, domain, docs):
+		success = False
+		for doc in docs or []:
+			if doc.name and doc.text:
+				success = self.add(domain, doc.name, doc.text, doc.mtime, commit=False)
+				if not success:
+					break
+			else:
+				break
+		if success:
+			self.ww.db.commit()
+		return success
 
 	# Remove documents and chunks
 	# ----------------------------------------------------------------------

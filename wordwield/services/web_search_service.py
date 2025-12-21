@@ -12,26 +12,14 @@ class WebSearchService(Service):
 	# Initialize service
 	# ----------------------------------------------------------------------
 	def initialize(self):
-		self.rag             = self.ww.services.RagService      # Vector storage and retrieval
-		self.google          = self.ww.services.GoogleService   # Web discovery via Google
-		self.website_service = self.ww.services.WebSiteService  # Page loading and text extraction
+		self.rag     = self.ww.services.RagService      # Vector storage and retrieval
+		self.google  = self.ww.services.GoogleService   # Web discovery via Google
+		self.website = self.ww.services.WebsiteService  # Page loading and text extraction
+		self.cache   = self.ww.services.CacheService    # Cache
 
 	# ======================================================================
 	# PRIVATE METHODS
 	# ======================================================================
-
-	# Load web page and extract readable text
-	# ----------------------------------------------------------------------
-	def _get_text(self, webpage):
-		text = None
-		html = self.website_service.load(
-			url = webpage['url']                             # Page URL
-		)
-		if html:
-			text = self.website_service.extract_text(
-				html = html                                        # Raw HTML content
-			)
-		return text
 
 	# Resolve a modification time for a search result
 	# ----------------------------------------------------------------------
@@ -41,27 +29,27 @@ class WebSearchService(Service):
 			return int(published.timestamp())
 		return int(time.time())
 	
+	# Generate deterministic rag domain name from intent
+	# ----------------------------------------------------------------------
+	def _get_domain_id(self, query):
+		return f'web_search_{abs(hash(query))}'
+	
 	# Ingest web search results into a RAG domain
 	# ----------------------------------------------------------------------
-	def _ingest(self, query, time_range, domain, k_results):
-		results = self.google.search(
-			query      = query,       # Search query
-			time_range = time_range,  # Time constraint
-			top_k      = k_results    # Result count
-		)
-
+	def _load_docs(self, results):
+		texts = {}
 		for result in results:
-			text = self._get_text(result)               # Load and extract page text
-			key  = result.get('url') if result else None
-			if text and key:
-				self.rag.add(
-					domain         = domain,            # Target RAG domain
-					key            = key,               # Use URL as unique key
-					text           = text,              # Extracted content
-					external_mtime = self._get_mtime(result)
-				)
+			if result:
+				url   = result.url
+				title = result.title
+			else:
+				url   = None
+				title = None
+			if url:
+				text = self.website.load(url, title)             # Load and extract page text
+				texts[url] = text
 
-		self.ww.db.commit()
+		return texts if len(texts) else None
 
 	# ======================================================================
 	# PUBLIC METHODS
@@ -69,17 +57,25 @@ class WebSearchService(Service):
 
 	# Search within an existing RAG domain
 	# ----------------------------------------------------------------------
-	def search(self, query, domain, k_results=1, k_chunks=10, time_range=None):
+	async def search(self, query, k_results=1, k_chunks=10, time_range=None):
+		domain = self._get_domain_id(query)
 		if not self.rag.has_domain(domain):
 			if time_range is None:
 				time_range = (None, None)
-				
-			self._ingest(
-				query      = query,
-				domain     = domain,
-				time_range = time_range,
-				k_results  = k_results
+
+			docs = self.google.search(    # List of DocSchema
+				query      = query,       # Search query
+				time_range = time_range,  # Time constraint
+				top_k      = k_results    # Result count
 			)
+
+			print(f'Googled {len(docs)} results')
+			docs = await self.website.load(docs)
+
+			for doc in docs:
+				print(doc)
+
+			self.rag.add_many(domain, docs)
 
 		texts = self.rag.search(
 			query    = query,

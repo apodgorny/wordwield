@@ -2,9 +2,9 @@
 # Google search service (discovery only).
 # ======================================================================
 
-import requests
+import json
 
-from datetime import datetime
+import requests
 
 from wordwield.core.base.service import Service
 
@@ -22,33 +22,6 @@ class GoogleService(Service):
 	# PRIVATE METHODS
 	# ======================================================================
 
-	# Parse common ISO8601-ish datetime strings from metatags
-	# ----------------------------------------------------------------------
-	def _parse_date(self, date_str):
-		if not date_str:
-			return None
-
-		candidates = [
-			date_str,
-			date_str.replace('Z', '+00:00')
-		]
-
-		for candidate in candidates:
-			try:
-				return datetime.fromisoformat(candidate)
-			except Exception:
-				continue
-
-		return None
-
-	# Convert unix timestamp to UTC datetime
-	# ----------------------------------------------------------------------
-	def _to_datetime(self, ts):
-		result = None
-		if ts is not None:
-			result = datetime.utcfromtimestamp(ts)
-		return result
-
 	# Extract publication date from search item
 	# ----------------------------------------------------------------------
 	def _publish_date(self, item):
@@ -63,26 +36,24 @@ class GoogleService(Service):
 				'datepublished',
 				'pubdate'
 			):
-				result = self._parse_date(tag.get(key))
-				if result:
-					return result
-
+				point = self.ww.schemas.TimePointSchema.from_iso(tag.get(key))
+				if point is not None:
+					result = point.timestamp
+					break
+			if result is not None:
+				break
 		return result
 
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
-
-	# Perform a Google search
+	# Query Google search API.
 	# ----------------------------------------------------------------------
-	def search(self, query, time_range, top_k):
+	def _search(self, query, time_range, top_k):
 		if not self.google_api_key or not self.search_engine_id:
 			raise RuntimeError('Google search credentials are not configured.')
 
 		google_api_url = 'https://www.googleapis.com/customsearch/v1'
 		from_ts, to_ts = time_range                                     # Unix timestamps
-		from_dt        = self._to_datetime(from_ts)
-		to_dt          = self._to_datetime(to_ts)
+		from_point     = self.ww.schemas.TimePointSchema.create(from_ts) if from_ts is not None else None
+		to_point       = self.ww.schemas.TimePointSchema.create(to_ts) if to_ts is not None else None
 
 		params = {
 			'key' : self.google_api_key,
@@ -107,8 +78,8 @@ class GoogleService(Service):
 		for item in items:
 			link       = item.get('link')
 			published  = self._publish_date(item)
-			too_old    = from_dt and published and published < from_dt
-			too_recent = to_dt   and published and published > to_dt
+			too_old    = from_point and published and published < from_point.timestamp
+			too_recent = to_point   and published and published > to_point.timestamp
 
 			is_valid = bool(link)
 
@@ -116,12 +87,22 @@ class GoogleService(Service):
 				is_valid = False
 
 			if is_valid:
-				results.append({
-					'url'     : link,
-					'title'   : item.get('title'),
-					'snippet' : item.get('snippet'),
-					'date'    : published
-				})
+				results.append(self.ww.schemas.DocSchema(
+					name    = link,
+					title   = item.get('title'),
+					snippet = item.get('snippet'),
+					mtime   = published,
+					source  = 'google'
+				))
+		return results
 
+	# ======================================================================
+	# PUBLIC METHODS
+	# ======================================================================
+
+	# Perform a Google search
+	# ----------------------------------------------------------------------
+	def search(self, query, time_range, top_k):
+		results = self._search(query=query, time_range=time_range, top_k=top_k)
 		self.log(f'Found {len(results)} results')
 		return results

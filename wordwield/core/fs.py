@@ -8,8 +8,8 @@ from bs4 import BeautifulSoup
 
 class Directory:
 	def __init__(self, path):
-		self.path = path
-		self.name = os.path.basename(path)
+		self.path     = path
+		self.name     = os.path.basename(path)
 
 	def __repr__(self):
 		return f'<Directory: `{self.path}`>'
@@ -52,11 +52,12 @@ class Directory:
 class File:
 	READABLE_FILE_EXT = {'txt', 'md', 'html', 'htm', 'pdf', 'docx'}
 
-	def __init__(self, path):
+	def __init__(self, path, encoding='utf-8'):
 		self.path                   = path
 		self.name                   = os.path.basename(path)
 		self.prefix, self.extension = os.path.splitext(self.name)
 		self.extension              = self.extension.lower().lstrip('.')
+		self.encoding               = encoding
 
 		self.readable = {
 			'_'    : self._read_txt,
@@ -81,25 +82,25 @@ class File:
 	# PRIVATE METHODS
 	# ==============================================================================================
 
-	def _read_txt(self, path, encoding):
-		with open(self.path, 'r', encoding=encoding) as f:
+	def _read_txt(self):
+		with open(self.path, 'r', encoding=self.encoding) as f:
 			return f.read()
 
-	def _read_html(self, path, encoding):
-		html = self._read_txt(path, encoding)
+	def _read_html(self):
+		html = self._read_txt(self.path, self.encoding)
 		return BeautifulSoup(html, 'html.parser').get_text(' ', strip=True)
 
-	def _read_pdf(self, path, encoding):
+	def _read_pdf(self):
 		out = []
-		with pdfplumber.open(path) as pdf:
+		with pdfplumber.open(self.path) as pdf:
 			for page in pdf.pages:
 				text = page.extract_text()
 				if text:
 					out.append(text)
 		return '\n'.join(out)
 
-	def _read_docx(self, path, encoding):
-		doc = docx.Document(path)
+	def _read_docx(self):
+		doc = docx.Document(self.path)
 		return '\n'.join(p.text for p in doc.paragraphs)
 	
 	# ==============================================================================================
@@ -108,20 +109,33 @@ class File:
 
 	# Read file content
 	# ----------------------------------------------------------------------------------------------
-	def read(self, encoding='utf-8'):
-		reader = self.readable.get(self.extension, self.readable['_'])
-		return reader(self.path, encoding)
+	@classmethod
+	def read(cls, path, encoding='utf-8'):
+		if File.exists(path):
+			f = File(path)
+			reader = f.readable.get(f.extension, f.readable['_'])
+			return reader()
+		return None
 		
 	# Write content to file
 	# ----------------------------------------------------------------------------------------------
-	def write(self, content, encoding='utf-8', mode='w'):
-		if self.extension not in self.non_writable:
-			with open(self.path, 'w', encoding=encoding) as f:
+	@classmethod
+	def write(cls, path, content, encoding='utf-8', mode='w'):
+		f = File(path)
+		if f.extension not in f.non_writable:
+			with open(f.path, mode, encoding=encoding) as f:
 				f.write(content)
-		else:
-			raise ValueError(f'Cannot write to files with `.{self.extension}` extension.')
+				return True
+		return False
 
 	# Append content to file
 	# ----------------------------------------------------------------------------------------------
-	def append(self, content, encoding='utf-8'):
-		return self.write(content, encoding=encoding, mode='a')
+	@classmethod
+	def append(cls, path, content, encoding='utf-8'):
+		return cls.write(path, content, encoding=encoding, mode='a')
+	
+	# Exists?
+	# ----------------------------------------------------------------------------------------------
+	@classmethod
+	def exists(cls, path):
+		return os.path.exists(path)
