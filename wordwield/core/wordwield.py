@@ -6,6 +6,7 @@ from sqlalchemy.orm              import sessionmaker
 from wordwield.core.base.record  import Base, Record
 from wordwield.core.base         import Service
 from wordwield.core.fs           import Directory, File
+from wordwield.core.encoder      import Encoder
 
 from wordwield.core              import (
 	Operator,
@@ -20,12 +21,12 @@ from wordwield.core              import (
 )
 
 # Runs coroutines synchronously so `ww(...)` executes without explicit await.
-# --------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 class WordWieldMeta(type):
 	def __call__(cls, coroutine, *args, **kwargs):
 		return asyncio.run(coroutine)
 
-# --------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 class WordWield(metaclass=WordWieldMeta):
 	verbose        = True
 	is_initialized = False
@@ -35,7 +36,7 @@ class WordWield(metaclass=WordWieldMeta):
 	env            = None
 
 	# Initialize WordWield framework for given project.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def initialize(cls, PROJECT_NAME, PROJECT_PATH, reset_db=True, verbose=True):
 		cls.verbose = verbose
@@ -48,11 +49,9 @@ class WordWield(metaclass=WordWieldMeta):
 		Registry('expertise', cls)
 		Registry('services',  cls)
 
-		# Load environment variables from root and project .env into env registry.
-		cls._setup_env(PROJECT_NAME, PROJECT_PATH)
-		
-		# Resolve paths, prepare DB, and load built-in + project classes.
-		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)
+		cls._setup_env(PROJECT_NAME, PROJECT_PATH)    # Load environment variables from root and project .env into env registry.
+		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)  # Resolve paths, prepare DB, and load built-in + project classes.
+		cls._warmup()                                 # Setup encoder instance to be accessible on all levels
 
 		cls._register_builtins()
 		cls._register_project()
@@ -63,8 +62,16 @@ class WordWield(metaclass=WordWieldMeta):
 		cls.log_success(f"Project '{PROJECT_NAME}' initialized in '{PROJECT_PATH}'")
 		cls.log(T(T.DATA, T.TREE, cls.to_dict(), f'Project `{cls.config.PROJECT_NAME}`', color=True))
 
+	@classmethod
+	def _warmup(cls):
+		cls.encoder = Encoder()
+		cls.log_info('Warming up encoder:')
+		cls.log_info(f'- Model : `{cls.encoder.model_name}`')
+		cls.log_info(f'- Dim   : {cls.encoder.dim}')
+		cls.encoder.encode('Warmup')
+
 	# Load environment from WordWield root .env with project .env overrides.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _setup_env(cls, project_name, project_path):
 		# Load env files in priority order: repo root → wordwield/ → project
@@ -84,7 +91,7 @@ class WordWield(metaclass=WordWieldMeta):
 		cls.env.update(env)
 
 	# Setup key project paths into config registry.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _setup_paths(cls, PROJECT_NAME, PROJECT_PATH):
 		# Persist key paths so registries and DB know where to read/write.
@@ -121,7 +128,7 @@ class WordWield(metaclass=WordWieldMeta):
 		os.makedirs(cls.config.LOGS_DIR, exist_ok=True)
 
 	# Register all built-in classes into registries.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _register_builtins(cls):
 		# Manually register base Agent so ww.operators.Agent is available.
@@ -135,7 +142,7 @@ class WordWield(metaclass=WordWieldMeta):
 		cls._register_class(os.path.join(cls.config.WW_PATH, 'services'),  cls.services,  Service)
 
 	# Register all project-specific classes into registries.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _register_project(cls):
 		# Walk the project packages and register subclasses alongside their namespaces.
@@ -147,7 +154,7 @@ class WordWield(metaclass=WordWieldMeta):
 		cls._register_expertise(cls.config.EXPERTISE_DIR, cls.expertise)
 
 	# Compile list of Python files to inspect for subclasses.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _compile_import_file_list(cls, package_path, registry, base_class, origin='wordwield'):
 		import_list  = []
@@ -176,7 +183,7 @@ class WordWield(metaclass=WordWieldMeta):
 		return import_list
 	
 	# Register expertise files from given path into given registry.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _register_expertise(cls, path, reg):
 		def on_subdirectory(d):
@@ -194,7 +201,7 @@ class WordWield(metaclass=WordWieldMeta):
 		)
 
 	# Register all classes found in package path into given registry.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _register_class(cls, package_path, registry, base_class, origin='wordwield'):
 		file_list = cls._compile_import_file_list(package_path, registry, base_class, origin)
@@ -228,13 +235,13 @@ class WordWield(metaclass=WordWieldMeta):
 				raise error
 			
 	# Initialize all registered services
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _init_services(cls):
 		for name, service in cls.services.items():
 			cls.log_info(f'Initializing service: `{name}`')
 			instance = service()
-			instance.ww = cls
+			# instance.ww = cls
 			cls.services[name] = instance
 		
 		for name, service in cls.services.items():
@@ -244,7 +251,7 @@ class WordWield(metaclass=WordWieldMeta):
 
 	# Initialize or reset DB engine/session and create all tables.
 	# If drop_existing is True, drop all tables but do NOT delete the db file.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def _init_db(cls, drop_existing=False):
 		db_path = cls.config.get('DB_PATH') or cls.config.get('DB_FILE')
@@ -267,7 +274,7 @@ class WordWield(metaclass=WordWieldMeta):
 		O.enable_instantiation(cls.get_operator_class)
 
 		if drop_existing:
-			# --- Drop all tables, but do NOT remove the file ---
+			# ---------------------------------------------------------------------- Drop all tables, but do NOT remove the file ---
 			inspector = inspect(engine)
 			with engine.begin() as conn:
 				for table_name in inspector.get_table_names():
@@ -279,7 +286,7 @@ class WordWield(metaclass=WordWieldMeta):
 		cls.log_success(f'Database initialized at {db_path}')
 
 	# Resolve operator class from registry path.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def get_operator_class(cls, path: str):
 		'''
@@ -301,7 +308,7 @@ class WordWield(metaclass=WordWieldMeta):
 		return operator_class
 
 	# Logging utilities
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def log(cls, msg, color='', end='\n'):
 		if cls.verbose:
@@ -326,7 +333,7 @@ class WordWield(metaclass=WordWieldMeta):
 		print(String.color(f'ERROR:  ', String.RED, 'b'), msg, flush=True, end=end); raise RuntimeError(msg)
 	
 	# Central LLM call with schema validation.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	async def ask(
 		cls,
@@ -347,7 +354,7 @@ class WordWield(metaclass=WordWieldMeta):
 		)
 	
 	# Export current framework state as dictionary.
-	# --------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	@classmethod
 	def to_dict(cls):
 		'''

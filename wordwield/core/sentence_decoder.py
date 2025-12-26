@@ -140,9 +140,9 @@ class SentenceDecoder(nn.Module):
 		max_len     = 64,
 		save_dir    = '/kaggle/working'
 	):
-		# -------------------------------
+		# ----------------------------------------------------------------------
 		# Load dataset (AP + GPT-2 tokens)
-		# -------------------------------
+		# ----------------------------------------------------------------------
 		dataset = SentenceDataset(path)
 		loader  = DataLoader(
 			dataset,
@@ -152,9 +152,9 @@ class SentenceDecoder(nn.Module):
 			pin_memory  = True
 		)
 	
-		# -------------------------------
+		# ----------------------------------------------------------------------
 		# Optimizer + FP16 scaler
-		# -------------------------------
+		# ----------------------------------------------------------------------
 		params  = filter(lambda p: p.requires_grad, self.parameters())
 		optim   = torch.optim.AdamW(params, lr=lr)
 		scaler  = torch.cuda.amp.GradScaler() if device.type == 'cuda' else None
@@ -175,9 +175,9 @@ class SentenceDecoder(nn.Module):
 				ids  = ids.to(device)
 				mask = mask.to(device)
 	
-				# ------------------------------------
+				# ----------------------------------------------------------------------
 				# Build prefix from AP → GPT-2 hidden
-				# ------------------------------------
+				# ----------------------------------------------------------------------
 				prefix = self.proj(ap).unsqueeze(1)
 	
 				# token embeddings
@@ -203,7 +203,7 @@ class SentenceDecoder(nn.Module):
 	
 				optim.zero_grad()
 	
-				# ---- speed tracking ----
+				# ---------------------------------------------------------------------- speed tracking ----
 				token_counter += ids.numel()
 				tokens_per_sec = token_counter / (time.time() - start_time)
 	
@@ -212,9 +212,9 @@ class SentenceDecoder(nn.Module):
 					'tok/s' : f'{tokens_per_sec:.0f}'
 				})
 	
-			# ----------------------------------------
+			# ----------------------------------------------------------------------
 			# SAVE CHECKPOINT AFTER EACH EPOCH
-			# ----------------------------------------
+			# ----------------------------------------------------------------------
 			save_path = f'{save_dir}/sentence_decoder_epoch{epoch+1}.pt'
 			torch.save(self.state_dict(), save_path)
 			print(f'\n💾 Epoch {epoch+1} saved → {save_path}\n')

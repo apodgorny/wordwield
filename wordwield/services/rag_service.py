@@ -1,273 +1,151 @@
 # ======================================================================
-# RAG orchestration: DB CRUD, chunking, and FAISS sync.
+# RAG orchestration over semantic addresses (Vid-centric).
 # ======================================================================
 
-from time import time
-
-import numpy as np
-
-from tqdm                       import tqdm
+import torch as T
+from collections import defaultdict
 
 from wordwield.core.base.service import Service
-from wordwield.core.db           import RagDocument, RagDocumentChunk
-from wordwield.core.norm         import Norm
-from wordwield.core.sentencizers import PysbdSentencizer as Sentencizer
+from wordwield.core.db           import SemanticAtom
 from wordwield.core.vdb          import Vdb
-from wordwield.libs.viz          import Viz
+from wordwield.core.semantic     import Semantic
+from wordwield.core.vid          import Vid
 
 
 class RagService(Service):
 
+	# To initialize vector database and hydrate it from persistent atoms.
+	# ------------------------------------------------------------------
 	def initialize(self):
-		self.vdb         = Vdb()
-		self.sentencizer = Sentencizer()
-		self.reranker    = self.ww.services.RerankService
+		self.dim = Semantic('warmup').dim
+		self.vdb = Vdb(self.dim)
+		self._hydrate()
 
-	# ======================================================================
+	# ==================================================================
 	# PRIVATE METHODS
-	# ======================================================================
+	# ==================================================================
 
-	# Resolve document IDs for a domain and optional keys
-	# ----------------------------------------------------------------------
-	def _get_ids(self, domain, keys=None):
-		record_ids = []
-		if keys is None:
-			record_rows = RagDocument.get_by_domain(domain)
-			record_ids  = [r.id for r in record_rows]
-		else:
-			record_ids  = RagDocument.get_ids_by_keys(domain, keys)
-		return record_ids
-	
-	def _viz_scores(self, texts, bayes_scores, li_scores, effective):
-		for text, b, l, e in zip(texts, bayes_scores, li_scores, effective):
-				print(f'[bayes={b:.6f}, li={l:.6f}, effective={e:.6f}]')
-				print(text.strip())
-				print('––––––––––––––––––')
+	# To hydrate VDB from all non-temporary semantic atoms.
+	# ------------------------------------------------------------------
+	def _hydrate(self):
+		atoms = SemanticAtom.get(Vid(temporary=False))
 
-		frame = Viz.Frame(
-			Viz.Series(
-				name  = 'bayes',
-				data  = [float(x) for x in bayes_scores],
-				color = '#ff5555',
-				units = 'score',
-				dots  = False
-			),
-			Viz.Series(
-				name  = 'li',
-				data  = [float(x) for x in li_scores],
-				color = '#55ff55',
-				units = 'score',
-				dots  = False
-			),
-			Viz.Series(
-				name  = 'effective',
-				data  = [float(x) for x in effective],
-				color = '#55aaff',
-				units = 'score',
-				dots  = False
-			),
-			Viz.Info(
-				name = 'text',
-				data = [t.strip() for t in texts]
-			),
-		)
+		print(f'Hydrating with {len(atoms)} atoms')
 
-		Viz.render(
-			view = 'plot',
-			data = frame
-		)
+		if atoms:
+			by_domain = defaultdict(list)
 
-	
-	# Detect ridges
-	# ----------------------------------------------------------------------
-	def _get_ridges(self, query, texts, ap_prev=None, karma=0.5):
-		ridges = []
+			for aid, data in atoms.items():
+				v = Vid(id=aid)
+				by_domain[v.domain].append((aid, data['vector']))
 
-		if texts:
-			# --------------------------------------------------
-			# 1. Raw signals
-			# --------------------------------------------------
-			bayes_scores = self.reranker.rerank(
-				None,
-				texts,
-				self.reranker.BAYES
+			for domain_id, items in by_domain.items():
+				ids, vecs = zip(*items)
+				self.vdb.add(domain_id, list(ids), T.stack(list(vecs)))
+
+	# To persist semantic atoms and register them in VDB.
+	# ------------------------------------------------------------------
+	def _set_semantic(self, vid_base: Vid, semantic: Semantic, mtime: int, temporary: bool):
+		ids     = []
+		vectors = []
+
+		for item, (text, vector) in enumerate(zip(semantic.texts, semantic.vectors)):
+			vid = Vid(
+				domain    = vid_base.domain,
+				doc       = vid_base.doc,
+				item      = item,
+				temporary = temporary
 			)
 
-			li_scores = self.reranker.rerank(
-				query,
-				texts,
-				self.reranker.LATE_INTERACTION
+			SemanticAtom.set(
+				vid    = vid,
+				text   = text,
+				vector = vector,
+				mtime  = mtime
 			)
 
-			bayes = np.asarray(bayes_scores, dtype='float32').reshape(-1)
-			li    = np.asarray(li_scores,    dtype='float32').reshape(-1)
+			ids.append(vid.id)
+			vectors.append(vector)
 
-			# --------------------------------------------------
-			# 2. Bayes = hard / soft mask (PRIOR)
-			# --------------------------------------------------
-			# Hard mask (minimal, interpretable)
-			bayes_prior = np.clip(bayes, 0.0, 1.0)
+		self.vdb.add(vid_base.domain, ids, T.stack(vectors))
+		self.ww.db.commit()
 
-			# --------------------------------------------------
-			# 3. LI = normalized landscape (ENERGY)
-			# --------------------------------------------------
-			li_norm = li - li.min()
-			if li_norm.max() > 0:
-				li_norm = li_norm / li_norm.max()
-
-			# --------------------------------------------------
-			# 4. Effective landscape: LI | Bayes
-			# --------------------------------------------------
-			effective = li_norm * bayes_prior
-
-			self._viz_scores(
-				texts        = texts,
-				bayes_scores = bayes_scores,
-				li_scores    = li_scores,
-				effective    = effective
-			)
-
-			exit()
-
-			# --------------------------------------------------
-			# 6. Ridge detection (percentile over non-zero)
-			# --------------------------------------------------
-			nonzero = effective[effective > 0]
-
-			if nonzero.size > 0:
-				threshold = np.percentile(nonzero, 90)
-
-				for i, s in enumerate(effective):
-					if s >= threshold:
-						ridges.append({
-							'text':  texts[i],
-							'score': float(s)
-						})
-
-		return ridges
-
-	
-	# Delete chunks and remove vectors from Vdb
-	# ----------------------------------------------------------------------
-	def _delete_chunks(self, domain, rows):
-		for row in rows:
-			self.vdb.remove(domain, row.id)
-			row.delete()
 		return None
-	
-	# Create and index chunks
-	# ----------------------------------------------------------------------
-	def _create_chunks_for_document(self, domain, document_id, text, key):
-		chunk_texts = self.sentencizer.to_sentences(text)
-		if chunk_texts:
-			rows = RagDocumentChunk.create_many_for_document(
-				document_id=document_id, texts=chunk_texts
-			)
 
-			if rows:
-				embeddings = self.vdb.encoder.encode_sequence(chunk_texts)
-				vecs       = Norm.to_sphere(embeddings).cpu().numpy().astype('float32')
-				# for row, vec in tqdm(zip(rows, vecs), desc='    ', total=len(rows)):
-				for row, vec in zip(rows, vecs):
-					row.vector = vec.tobytes()
+	# To remove semantic atoms by Vid mask.
+	# ------------------------------------------------------------------
+	def _unset(self, vid: Vid):
+		atoms = SemanticAtom.get(vid)
+		ids   = []
 
-				ids = [r.id for r in rows]
-				self.vdb.add_many(domain, ids, vectors=vecs)
-		return None
-	
-	# Rerank ridges
-	# ----------------------------------------------------------------------
-	def _rerank_ridges(self, query, ridge_texts, top_k):
-		return self.reranker.rerank(query, ridge_texts, self.reranker.CROSS_ENCODER)[:top_k]
-	
-	# ======================================================================
-	# PUBLIC METHODS
-	# ======================================================================
-	
-	# Check whether a domain exists and has any documents
-	# ----------------------------------------------------------------------
-	def has_domain(self, domain):
-		rows = RagDocument.get_by_domain(domain)          # Fetch documents for domain
-		exists = bool(rows)                               # Domain exists if any rows found
-		return exists
+		if atoms:
+			ids = list(atoms.keys())
+			self.vdb.remove_ids(vid.domain, ids)
 
-	# Add or update a document and chunks
-	# ----------------------------------------------------------------------
-	def add(self, domain, key, text, external_mtime, commit=True):
-		success = False
-		doc     = RagDocument.get_by_domain_and_key(domain, key)
+			for aid in ids:
+				SemanticAtom.unset(aid)
 
-		if doc is None:
-			doc = RagDocument(domain=domain, key=key, mtime=external_mtime).add()
-			self._create_chunks_for_document(domain, doc.id, text, key)
-			success = True
-		else:
-			if external_mtime > doc.mtime:
-				doc.mtime = external_mtime
-				self._reindex(domain, doc.id, text, key)
-				success = True
-
-		if success and commit: self.ww.db.commit()
-		return success
-	
-	# Add many results in one transaction
-	# ----------------------------------------------------------------------
-	def add_many(self, domain, docs):
-		success = False
-		for doc in docs or []:
-			if doc.name and doc.text:
-				success = self.add(domain, doc.name, doc.text, doc.mtime, commit=False)
-				if not success:
-					break
-			else:
-				break
-		if success:
 			self.ww.db.commit()
-		return success
 
-	# Remove documents and chunks
-	# ----------------------------------------------------------------------
-	def remove(self, domain, keys=None):
-		record_ids = self._get_ids(domain, keys)
+		return ids
 
-		if record_ids:
-			rows = RagDocumentChunk.get_by_document_ids(record_ids)
-			self._delete_chunks(domain, rows)
-			RagDocument.delete_by_ids(record_ids)
+	# ==================================================================
+	# PUBLIC METHODS
+	# ==================================================================
 
-		return None
+	# To add or update semantic content under Vid.
+	# ------------------------------------------------------------------
+	def set(self, vid: Vid, text: str, mtime: int = 0, temporary: bool = False):
+		existing = SemanticAtom.get(
+			Vid(
+				domain    = vid.domain,
+				doc       = vid.doc,
+				item      = None,
+				temporary = None
+			)
+		)
 
-	# Search
-	# ----------------------------------------------------------------------
-	def search(self, query, domain, keys=None, k=5, ap_prev=None, karma=0.5):
-		print(f'Search for domain {domain}')
-		result        = []
-		document_rows = RagDocument.get_by_domain(domain)
-		print(f'Found {len(document_rows)} rows')
+		max_mtime = None
+		for data in existing.values():
+			if data['mtime'] is not None:
+				max_mtime = data['mtime'] if max_mtime is None else max(max_mtime, data['mtime'])
 
-		if document_rows:
-			ridges = []
+		if existing and max_mtime is not None and mtime <= max_mtime:
+			return False
 
-			for doc in document_rows:
-				chunks = RagDocumentChunk.get_by_document_ids([doc.id])
+		if existing:
+			self._unset(Vid(domain=vid.domain, doc=vid.doc))
 
-				if chunks:
-					texts = [c.text for c in chunks]
+		semantic = Semantic(text)
+		self._set_semantic(vid, semantic, mtime, temporary)
 
-					new_ridges = self._get_ridges(
-						query   = query,
-						texts   = texts,
-						ap_prev = ap_prev,
-						karma   = karma
-					)
+		return True
 
-					if new_ridges:
-						ridges.extend(new_ridges)
+	# To remove semantic content by Vid mask.
+	# ------------------------------------------------------------------
+	def unset(self, vid: Vid):
+		return self._unset(vid)
 
-			if ridges:
-				ridge_texts = [ridge['text'] for ridge in ridges]
-				result = self._rerank_ridges(query, ridge_texts, k)
+	# To search semantic space within a domain.
+	# ------------------------------------------------------------------
+	def search(self, query: str, vid: Vid, top_k: int = 10):
+		result = {}
+		qvec   = Semantic(query).vectors[0]
 
-		print('result', result)
+		seeds = self.vdb.query(
+			vid.domain,
+			qvec,
+			top_k
+		)
+
+		by_doc = defaultdict(list)
+		for sid in seeds:
+			v = Vid(id=sid)
+			by_doc[v.doc].append(sid)
+
+		for doc_id, ids in by_doc.items():
+			semantic = Semantic('', sentencize=False)
+			semantic.load(ids)
+			result[doc_id] = semantic.search(query)
 
 		return result

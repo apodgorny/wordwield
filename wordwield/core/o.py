@@ -207,7 +207,9 @@ class O(BaseModel, metaclass=OMeta):
 	
 	@classmethod
 	def load(cls, ref: int | str) -> 'O':
-		return ODB.load(ref, cls)
+		o = ODB.load(ref, cls)
+		o.on_load()
+		return o
 	
 	@classmethod
 	def loader(cls, name):
@@ -376,6 +378,9 @@ class O(BaseModel, metaclass=OMeta):
 	def keys(self)                      -> list[str] : return list(self.model_fields.keys())
 	def unpack(self)                                 : return T(T.PYDANTIC, T.ARGUMENTS, self)
 
+	def on_save(self): return self
+	def on_load(self): return self	
+
 	def to_operator(self):
 		self.assert_instanceable()
 		return O.model_config['get_operator_class'](self.class_name)(self.name, self)
@@ -405,6 +410,7 @@ class O(BaseModel, metaclass=OMeta):
 		return self.__class__(**data)
 
 	def save(self):
+		self.on_save()
 		self.db.save()
 		return self
 

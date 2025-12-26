@@ -2,7 +2,7 @@
 # Google + Scraper + RAG 
 # ======================================================================
 
-import time
+import time, os
 
 from wordwield.core.base.service import Service
 
@@ -60,26 +60,42 @@ class WebSearchService(Service):
 	async def search(self, query, k_results=1, k_chunks=10, time_range=None):
 		domain = self._get_domain_id(query)
 		if not self.rag.has_domain(domain):
-			if time_range is None:
-				time_range = (None, None)
+			path = '/Users/alexander/dev/webpage_sentences.txt'
+			if os.path.exists(path):
+				with open(path, 'r') as f:
+					text = f.read()
+			else:
+				print('!!!!web!!!')
+				exit()
+				if time_range is None:
+					time_range = (None, None)
 
-			docs = self.google.search(    # List of DocSchema
-				query      = query,       # Search query
-				time_range = time_range,  # Time constraint
-				top_k      = k_results    # Result count
-			)
+				docs = self.google.search(    # List of DocSchema
+					query      = query,       # Search query
+					time_range = time_range,  # Time constraint
+					top_k      = k_results    # Result count
+				)
 
-			print(f'Googled {len(docs)} results')
-			docs = await self.website.load(docs)
+				print(f'Googled {len(docs)} results')
+				docs = await self.website.load(docs)
 
-			for doc in docs:
-				print(doc)
+				for doc in docs:
+					print(doc)
 
-			self.rag.add_many(domain, docs)
+				from wordwield.core.sentencizers import PysbdSentencizer as Sentencizer
+				sentencizer = Sentencizer()
+				texts = sentencizer.to_sentences(docs[0].text)
+				with open(path, 'w') as f:
+					f.write('\n'.join(texts))
+
+			query = 'What are the main steps?'
+			# self.ww.services.SemanticSearchService.scan(texts).search(query).disp(True)
+			self.rag.add(domain, 'mydoc', text)
 
 		texts = self.rag.search(
 			query    = query,
 			domain   = domain,
 			k        = k_chunks
 		)
+		print('QUERY:', query)
 		return texts

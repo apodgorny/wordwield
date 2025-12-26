@@ -1,8 +1,10 @@
 # ======================================================================
 # Text encoder with attention-based pooling utilities.
 # TODO: add token-level sentence wrapping so we avoid silent tokenizer truncation when texts exceed max_length.
+# TODO: add pooling choice: pooling='attention|mean|cls'
 # ======================================================================
 
+import os
 import torch
 import torch.nn.functional as F
 import contextlib
@@ -17,13 +19,16 @@ class Encoder:
 	def __init__(self, model_name=None):
 		default_model_name = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 		self.model_name    = model_name or default_model_name
-		self.tokenizer     = AutoTokenizer.from_pretrained(self.model_name)
-		self.model         = AutoModel.from_pretrained(self.model_name, attn_implementation='eager').to(device)
+
+		self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+		self.model     = AutoModel.from_pretrained(self.model_name, attn_implementation = 'eager').to(device)
+		self.dim       = self.model.config.hidden_size
+
 		self.model.eval()
 
-	# ==========================================================================================
+	# ======================================================================
 	# PRIVATE METHODS
-	# ==========================================================================================
+	# ======================================================================
 
 	# Centralized tokenizer to keep truncation/padding consistent
 	# ----------------------------------------------------------------------
@@ -36,28 +41,48 @@ class Encoder:
 			max_length     = self.tokenizer.model_max_length
 		)
 
-	# Attention pooling over hidden states
+	# Get amp
 	# ----------------------------------------------------------------------
-	def _attention_pool(self, hidden_states, attentions):
+	def _get_amp(self, with_attentions):
+		amp_ctx = torch.cuda.amp.autocast if device.type == 'cuda' else contextlib.nullcontext
+		amp     = amp_ctx if with_attentions else contextlib.nullcontext
+		return amp
+	
+	# ======================================================================
+	# PUBLIC METHODS
+	# ======================================================================
+
+	# Pool hidden states into a single AP vector
+	# ----------------------------------------------------------------------
+	def attention_pool(self, hidden_states, attentions=None):
 		'''
 		hidden_states: [S, D]
-		attentions: list of [batch, heads, S, S] for each layer
+		attentions:
+			- None            → fast pooling (no attentions)
+			- list of tensors → attention pooling (full mode)
 		'''
+
+		# ----------------------------------------------------------------------
+		# FAST PATH: no attentions
+		# ----------------------------------------------------------------------
+		if attentions is None:
+			# Simple mean pooling over sequence
+			ap_next = hidden_states.mean(dim=0)
+			return Norm.to_hypercube(ap_next)
+
+		# ----------------------------------------------------------------------
+		# FULL PATH: attention pooling
+		# ----------------------------------------------------------------------
 		att = torch.stack(attentions)   # [L, B, H, S, S]
-		att = att[:, 0]                 # take batch 0 → [L, H, S, S]
-		att = att.mean(dim=1)           # average over heads → [L, S, S]
-		att = att.mean(dim=0)           # average over layers → [S, S]
+		att = att[:, 0]                 # [L, H, S, S]
+		att = att.mean(dim=1)           # [L, S, S]
+		att = att.mean(dim=0)           # [S, S]
 
 		weights = att[0]
 		weights = F.softmax(weights, dim=0)
 
 		ap_next = (weights.unsqueeze(1) * hidden_states).sum(dim=0)
-		result = Norm.to_hypercube(ap_next)
-		return result
-	
-	# ==========================================================================================
-	# PUBLIC METHODS
-	# ==========================================================================================
+		return Norm.to_hypercube(ap_next)
 
 	# Eval mode
 	# ----------------------------------------------------------------------
@@ -66,17 +91,17 @@ class Encoder:
 
 	# Encode a single text
 	# ----------------------------------------------------------------------
-	def encode(self, text, ap_prev=None, karma=1):
-		amp_ctx = torch.cuda.amp.autocast if device.type == 'cuda' else contextlib.nullcontext
-		with torch.inference_mode(), amp_ctx():
+	def encode(self, text, ap_prev=None, karma=1, with_attentions=True):
+		amp = self._get_amp(with_attentions)
+
+		with torch.inference_mode(), amp():
 			tokens = self._tokenize(text, padding=False)
 			tokens = {k: v.to(device) for k, v in tokens.items()}
 
-			out    = self.model(**tokens, output_attentions=True)
-			hidden = out.last_hidden_state.squeeze(0)
-			attn   = out.attentions
-
-			ap_next = self._attention_pool(hidden, attn)
+			out     = self.model(**tokens, output_attentions=with_attentions)
+			hidden  = out.last_hidden_state.squeeze(0)
+			attn    = out.attentions if with_attentions else None
+			ap_next = self.attention_pool(hidden, attn)
 
 			if ap_prev is not None:
 				ap_prev = ap_prev.to(device)
@@ -85,15 +110,116 @@ class Encoder:
 
 		return ap_next.to('cpu')
 
-	# Encode a sequence of texts
+	# Encode a sequence of texts (naive)
 	# ----------------------------------------------------------------------
-	def encode_sequence(self, texts, ap_prev=None, karma=1):
+	def encode_sequence(self, texts, ap_prev=None, karma=1, with_attentions=True):
 		embeddings = []
+		prev       = ap_prev
+
 		for text in texts:
-			ap_next = self.encode(text, ap_prev=ap_prev, karma=karma)
+			ap_next = self.encode(
+				text,
+				ap_prev         = prev,
+				karma           = karma,
+				with_attentions = with_attentions
+			)
 			embeddings.append(ap_next)
+			prev = ap_next
+
 		result = torch.stack(embeddings)
 		return result
+	
+	# Encode a sequence of texts (as batch)
+	# ----------------------------------------------------------------------
+	def encode_sequence_batch(self, texts, ap_prev=None, karma=1, with_attentions=True):
+		ap_static = self.encode_batch(
+			texts,
+			karma           = karma,
+			with_attentions = with_attentions
+		)
+
+		ap_next = self.apply_batch_context(
+			ap_static,
+			ap_prev = ap_prev,
+			karma   = karma
+		)
+
+		return ap_next
+
+	# Encode a batch of texts (optionally with attentions)
+	# ----------------------------------------------------------------------
+	def encode_batch(self, texts, ap_prev_batch=None, karma=1, with_attentions=True):
+		amp = self._get_amp(with_attentions)
+
+		with torch.inference_mode(), amp():
+			# Tokenize
+			tokens = self._tokenize(texts, padding=True)
+			tokens = {k: v.to(device) for k, v in tokens.items()}
+
+			out = self.model(**tokens, output_attentions=with_attentions)
+
+			hidden = out.last_hidden_state      # [B, S, D]
+			attns  = out.attentions             # tuple(L) of [B, H, S, S] or None
+			mask   = tokens['attention_mask']   # [B, S]
+
+			ap_list = []
+			B = hidden.size(0)
+
+			for b in range(B):
+				seq_len  = mask[b].sum().item()
+				hidden_b = hidden[b, :seq_len]
+
+				if with_attentions:
+					# Build tuple of [1, H, S, S] tensors as attention_pool expects
+					att_b = tuple(
+						layer[b, :, :seq_len, :seq_len].unsqueeze(0)
+						for layer in attns
+					)
+				else:
+					att_b = None
+
+				ap_next = self.attention_pool(hidden_b, att_b)
+
+				# Optional recurrence (batch-wise)
+				if ap_prev_batch is not None:
+					ap_prev = ap_prev_batch[b].to(device)
+					ap_next = ap_next + karma * ap_prev
+					ap_next = Norm.to_hypercube(ap_next)
+
+				ap_list.append(ap_next.cpu())
+
+		return torch.stack(ap_list)
+
+	# Apply left-to-right AP context over batch-encoded AP vectors
+	# ----------------------------------------------------------------------
+	def apply_batch_context(self, ap_static_batch, ap_prev=None, karma=1):
+		'''
+		Apply contextual recurrence over batch AP values.
+
+		This is mathematically identical to encode_sequence(texts, ap_prev),
+		assuming ap_static_batch[i] == encode(texts[i], prev_ap=None).
+		'''
+
+		n          = ap_static_batch.size(0)
+		ap_dynamic = []
+
+		prev = ap_prev
+
+		for i in range(n):
+			ap_next = ap_static_batch[i]
+
+			if prev is not None:
+				ap_next = ap_next + karma * prev
+				ap_next = Norm.to_hypercube(ap_next)
+
+			ap_dynamic.append(ap_next)
+			prev = ap_next
+
+		return torch.stack(ap_dynamic)
+	
+	# ======================================================================
+	# TEST METHODS
+	# ======================================================================
 
 	# Test function to see if batch encode is semantically equal to single encode
 	# ----------------------------------------------------------------------
@@ -134,41 +260,58 @@ class Encoder:
 		print(f'Mean similarity : {sims.mean().item():.6f}')
 
 		return sims
-
-	# Encode a batch of texts without connecting them AP vector
+	
+	# Test that encode_sequence == encode_batch + apply_batch_context
 	# ----------------------------------------------------------------------
-	@torch.inference_mode()
-	def encode_batch(self, texts, ap_prev_batch=None, karma=1, batch_size=32):
-		amp_ctx = torch.cuda.amp.autocast if device.type == 'cuda' else contextlib.nullcontext
-		with amp_ctx():
-			# Tokenize
-			tokens = self._tokenize(texts, padding=True)
-			tokens = {k: v.to(device) for k, v in tokens.items()}
+	def test_apply_batch_context(self, texts, ap_prev=None, karma=1, atol=1e-6):
+		import torch
+		import torch.nn.functional as F
 
-			out = self.model(**tokens, output_attentions=True)
+		print('\n=== encode_sequence vs encode_batch + apply_batch_context ===')
+		print(f'Texts: {len(texts)}')
+		print(f'Initial ap_prev: {"yes" if ap_prev is not None else "no"}')
+		print(f'Karma: {karma}\n')
 
-			hidden = out.last_hidden_state      # [B, S, D]
-			attns  = out.attentions             # tuple(L) of [B, H, S, S]
-			mask   = tokens['attention_mask']   # [B, S]
+		# 1) Reference: incremental encode
+		ap_inc = self.encode_sequence(
+			texts,
+			ap_prev = ap_prev,
+			karma   = karma
+		)
 
-			ap_list = []
-			B = hidden.size(0)
+		# 2) Factorized path: batch + context
+		ap_static = self.encode_batch(
+			texts,
+			karma = karma
+		)
 
-			for b in range(B):
-				seq_len  = mask[b].sum().item()  # ignore padding so outputs match encode()
-				hidden_b = hidden[b, :seq_len]   # [S, D]
+		ap_ctx = self.apply_batch_context(
+			ap_static,
+			ap_prev = ap_prev,
+			karma   = karma
+		)
 
-				# Build tuple of [H, S, S] tensors as encode() expects
-				# Unsqueeze batch dim to match attention_pool()'s [B, H, S, S] expectation
-				att_b   = tuple(layer[b, :, :seq_len, :seq_len].unsqueeze(0) for layer in attns)  # tuple(L), each [1, H, S, S]
-				ap_next = self._attention_pool(hidden_b, att_b)
+		assert ap_inc.shape == ap_ctx.shape
 
-				# Optional recurrence
-				if ap_prev_batch is not None:
-					ap_prev = ap_prev_batch[b].to(device)
-					ap_next = ap_next + karma * ap_prev
-					ap_next = Norm.to_hypercube(ap_next)
+		# 3) Compare element-wise
+		diffs = torch.norm(ap_inc - ap_ctx, dim=1)
 
-				ap_list.append(ap_next.cpu())
+		max_diff  = diffs.max().item()
+		mean_diff = diffs.mean().item()
 
-		return torch.stack(ap_list)
+		print(f'Max L2 diff  : {max_diff:.8f}')
+		print(f'Mean L2 diff : {mean_diff:.8f}')
+
+		# cosine sanity (should be ~1)
+		cos = F.cosine_similarity(ap_inc, ap_ctx)
+		print(f'Min cosine   : {cos.min().item():.8f}')
+		print(f'Mean cosine  : {cos.mean().item():.8f}')
+
+		if not torch.allclose(ap_inc, ap_ctx, atol=atol):
+			raise AssertionError(
+				f'apply_batch_context mismatch: max_diff={max_diff}'
+			)
+
+		print('\n✓ apply_batch_context is EXACTLY equivalent to encode_sequence')
+		return True
+

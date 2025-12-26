@@ -1,0 +1,18 @@
+{
+	"python.analysis.autoSearchPaths": true,
+	"python.analysis.extraPaths": [
+		"/Users/alexander/dev/wordwield"
+	],
+	"python.analysis.indexing": true,
+	"python.analysis.typeCheckingMode": "off",
+	"python.analysis.diagnosticMode": "workspace",
+	"python.analysis.exclude": [
+		"**/site-packages"
+	],
+	"python.analysis.enabled": false,
+	"python.analysis.diagnosticMode": "off",
+	"python.analysis.typeCheckingMode": "off",
+	"python.analysis.reportMissingImports": "none",
+	"python.analysis.reportMissingModuleSource": "none",
+	"python.analysis.indexing": false
+}

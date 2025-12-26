@@ -20,12 +20,6 @@ class Norm:
 			result = v / (v.norm(dim=1, keepdim=True) + epsilon)
 		return result
 
-	# Alias for to_sphere
-	# ----------------------------------------------------------------------
-	@staticmethod
-	def s(v):
-		result = Norm.to_sphere(v)
-		return result
 
 	# Project to hypercube
 	# ----------------------------------------------------------------------
@@ -36,10 +30,28 @@ class Norm:
 			return v / (m + epsilon)
 		m = v.abs().max(dim=1, keepdim=True).values
 		return v / (m + epsilon)
+	
+	# Pac-Man Normalization
+	# ----------------------------------------------------------------------
+	def pacman(v, turns=None):
+		turns = turns if turns is not None else torch.zeros_like(v, dtype=torch.int64)
+		assert v.shape == turns.shape
 
-	#  Alias for to_hypercube
+		whole     = torch.floor(v).to(dtype=turns.dtype)   # 1. целая часть по каждой ности
+		v_norm    = v - whole                              # 2. остаток — локальная фаза
+		angles    = torch.acos(v_norm)                     # 3. угол из косинуса
+
+		new_turns = turns + whole
+
+		return v_norm, angles, new_turns
+
+	# Aliases
 	# ----------------------------------------------------------------------
 	@staticmethod
-	def h(v):
-		result = Norm.to_hypercube(v)
-		return result
+	def s(v): return Norm.to_sphere(v)
+
+	@staticmethod
+	def h(v): return Norm.to_hypercube(v)
+
+	@staticmethod
+	def p(v, t): return Norm.pacman(v, t)

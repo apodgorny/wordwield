@@ -47,6 +47,11 @@ class GoogleService(Service):
 	# Query Google search API.
 	# ----------------------------------------------------------------------
 	def _search(self, query, time_range, top_k):
+		# cache_key = f'{query} {time_range} {top_k}'
+		# print(cache_key)
+		# web_search = self.ww.schemas.WebSearchSchema.load(cache_key)
+		# if web_search:
+
 		if not self.google_api_key or not self.search_engine_id:
 			raise RuntimeError('Google search credentials are not configured.')
 
@@ -76,6 +81,7 @@ class GoogleService(Service):
 		results = []
 
 		for item in items:
+			print(item.get('link'), self._publish_date(item))
 			link       = item.get('link')
 			published  = self._publish_date(item)
 			too_old    = from_point and published and published < from_point.timestamp
@@ -94,6 +100,7 @@ class GoogleService(Service):
 					mtime   = published,
 					source  = 'google'
 				))
+			exit(1)
 		return results
 
 	# ======================================================================

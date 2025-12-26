@@ -1,9 +1,9 @@
-# ==========================================================================================
+# ======================================================================
 # Utility assumes that you have ~/.kaggle/kaggle.json in your system
 # kaggle.json is automatically downloaded when you go to kaggle website
 # And generate "Legacy API Key" by clicking a button in settings
 # Then do `mkdir ~/.kaggle` and `mv ~/Downloads/kaggle.json ~/.kaggle/kaggle.json`
-# ==========================================================================================
+# ======================================================================
 
 import os
 import time
@@ -29,18 +29,18 @@ class Kaggle:
 
 		self.username, self.key = self._get_credentials()
 
-	# ==========================================================================================
+	# ======================================================================
 	# PRIVATE METHODS
-	# ==========================================================================================
+	# ======================================================================
 
 	# Check if file in question exists, if so, return it's path, else None
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _has_file(self, dataset_path, dataset_file):
 		file_path = os.path.join(dataset_path, dataset_file)
 		return file_path if os.path.isfile(file_path) else None
 
 	# Try to find file and torch it
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _get_torch_file(self, dataset_id, dataset_path, dataset_file, device):
 		file_path = self._has_file(dataset_path, dataset_file)
 		if not file_path:
@@ -48,12 +48,12 @@ class Kaggle:
 		return torch.load(file_path, map_location=device)
 
 	# Build download url
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _get_download_url(self, dataset_id):
 		return f'https://www.kaggle.com/api/v1/datasets/download/{dataset_id}'
 
 	# Read kaggle credentials
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _get_credentials(self):
 		try:
 			with open(self.kaggle_json_path, 'r') as f:
@@ -70,13 +70,13 @@ class Kaggle:
 		raise ValueError('Warning: Kaggle token missing username or key. \n(See instructions in kaggle.py)')
 
 	# Get cache path for dataset
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _dataset_path(self, dataset_id):
 		owner, dataset_name = dataset_id.split('/')
 		return os.path.join(self.datasets_path, owner, dataset_name)
 	
 	# Download via Kaggle API
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _download(self, dataset_id, zip_path):
 		auth     = (self.username, self.key)
 		url      = self._get_download_url(dataset_id)
@@ -113,7 +113,7 @@ class Kaggle:
 		return True
 
 	# Extract downloaded file
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def _extract(self, zip_path, target_dir):
 		try:
 			with zipfile.ZipFile(zip_path, 'r') as z:
@@ -128,12 +128,12 @@ class Kaggle:
 			print(f'An unexpected error occurred: `{e}`')
 		return False
 
-	# ==========================================================================================
+	# ======================================================================
 	# PUBLIC METHODS
-	# ==========================================================================================
+	# ======================================================================
 	
 	# Download and extract dataset
-	# ------------------------------------------------------------------------------------------
+	# ----------------------------------------------------------------------
 	def load(self, dataset_id, dataset_file, device=None):
 		device = torch.device('cpu') if device is None else torch.device(device)
 
