@@ -1,15 +1,18 @@
 # ======================================================================
-# RAG orchestration over semantic addresses (Vid-centric).
+# RAG service coordinating semantic DB and vector DB.
 # ======================================================================
 
-import torch as T
-from collections import defaultdict
+from datetime import datetime
 
-from wordwield.core.base.service import Service
-from wordwield.core.db           import SemanticAtom
-from wordwield.core.vdb          import Vdb
-from wordwield.core.semantic     import Semantic
-from wordwield.core.vid          import Vid
+import torch
+
+from wordwield.core.base.service          import Service
+from wordwield.core.db.semantic_domain    import SemanticDomain
+from wordwield.core.db.semantic_document  import SemanticDocument
+from wordwield.core.db.semantic_atom      import vector_deserialize
+from wordwield.core.vdb                   import Vdb
+from wordwield.core.sid                   import Sid
+from wordwield.core.sentencizers          import PysbdSentencizer as Sentencizer
 
 
 class RagService(Service):
@@ -17,135 +20,169 @@ class RagService(Service):
 	# To initialize vector database and hydrate it from persistent atoms.
 	# ------------------------------------------------------------------
 	def initialize(self):
-		self.dim = Semantic('warmup').dim
-		self.vdb = Vdb(self.dim)
+		self.encoder     = self.ww.encoder
+		self.sentencizer = Sentencizer()
+		self.vdb         = Vdb(self.ww.encoder.dim)
 		self._hydrate()
 
 	# ==================================================================
 	# PRIVATE METHODS
 	# ==================================================================
 
-	# To hydrate VDB from all non-temporary semantic atoms.
+	# Restore persistent semantic atoms into vector DB.
+	# Remove all temporary domains from database.
 	# ------------------------------------------------------------------
 	def _hydrate(self):
-		atoms = SemanticAtom.get(Vid(temporary=False))
+		try:
+			# 1. Drop all temporary domains (DB only)
+			# ------------------------------------------------------------------
+			for domain in SemanticDomain.get_all(temporary=True):
+				SemanticDomain.unset(domain.id)
 
-		print(f'Hydrating with {len(atoms)} atoms')
+			# 2. Load persistent domains into VDB
+			# ------------------------------------------------------------------
+			for domain in SemanticDomain.get_all(temporary=False):
 
-		if atoms:
-			by_domain = defaultdict(list)
+				vector_ids    = []
+				vector_values = []
 
-			for aid, data in atoms.items():
-				v = Vid(id=aid)
-				by_domain[v.domain].append((aid, data['vector']))
+				for document in domain.get_documents():
+					for atom in document.atoms:
+						vector = vector_deserialize(atom.vector)
+						if vector is not None:
+							vector_ids.append(atom.id)
+							vector_values.append(vector)
+						else:
+							raise ValueError('Vector deserialization failed')
 
-			for domain_id, items in by_domain.items():
-				ids, vecs = zip(*items)
-				self.vdb.add(domain_id, list(ids), T.stack(list(vecs)))
-
-	# To persist semantic atoms and register them in VDB.
-	# ------------------------------------------------------------------
-	def _set_semantic(self, vid_base: Vid, semantic: Semantic, mtime: int, temporary: bool):
-		ids     = []
-		vectors = []
-
-		for item, (text, vector) in enumerate(zip(semantic.texts, semantic.vectors)):
-			vid = Vid(
-				domain    = vid_base.domain,
-				doc       = vid_base.doc,
-				item      = item,
-				temporary = temporary
-			)
-
-			SemanticAtom.set(
-				vid    = vid,
-				text   = text,
-				vector = vector,
-				mtime  = mtime
-			)
-
-			ids.append(vid.id)
-			vectors.append(vector)
-
-		self.vdb.add(vid_base.domain, ids, T.stack(vectors))
-		self.ww.db.commit()
-
-		return None
-
-	# To remove semantic atoms by Vid mask.
-	# ------------------------------------------------------------------
-	def _unset(self, vid: Vid):
-		atoms = SemanticAtom.get(vid)
-		ids   = []
-
-		if atoms:
-			ids = list(atoms.keys())
-			self.vdb.remove_ids(vid.domain, ids)
-
-			for aid in ids:
-				SemanticAtom.unset(aid)
-
+				if vector_ids:
+					vectors = torch.stack(vector_values)
+					self.vdb.add(
+						domain        = domain.id,
+						vector_ids    = vector_ids,
+						vector_values = vectors
+					)
 			self.ww.db.commit()
 
-		return ids
+		except Exception:
+			self.ww.db.rollback()
+			raise
+
+	# Split full document text into atom texts and vectors.
+	# ------------------------------------------------------------------
+	def _vectorize(self, text: str):
+		texts   = self.sentencizer.to_sentences(text)
+		vectors = self.encoder.encode_sequence(texts)
+		return texts, vectors
 
 	# ==================================================================
 	# PUBLIC METHODS
 	# ==================================================================
 
-	# To add or update semantic content under Vid.
+	# Create or ensure domain exists.
 	# ------------------------------------------------------------------
-	def set(self, vid: Vid, text: str, mtime: int = 0, temporary: bool = False):
-		existing = SemanticAtom.get(
-			Vid(
-				domain    = vid.domain,
-				doc       = vid.doc,
-				item      = None,
-				temporary = None
+	def set_domain(self, key: str, *, meta: str | None = None, temporary: bool = False) -> int:
+		try:
+			domain_id = SemanticDomain.set(
+				key       = key,
+				meta      = meta,
+				temporary = temporary
 			)
-		)
+			self.ww.db.commit()
+			return domain_id
 
-		max_mtime = None
-		for data in existing.values():
-			if data['mtime'] is not None:
-				max_mtime = data['mtime'] if max_mtime is None else max(max_mtime, data['mtime'])
+		except Exception:
+			self.ww.db.rollback()
+			raise
 
-		if existing and max_mtime is not None and mtime <= max_mtime:
-			return False
-
-		if existing:
-			self._unset(Vid(domain=vid.domain, doc=vid.doc))
-
-		semantic = Semantic(text)
-		self._set_semantic(vid, semantic, mtime, temporary)
-
-		return True
-
-	# To remove semantic content by Vid mask.
+	# Remove domain and all its documents and vectors.
 	# ------------------------------------------------------------------
-	def unset(self, vid: Vid):
-		return self._unset(vid)
+	def unset_domain(self, id_or_key: int | str) -> bool:
+		try:
+			removed = False
+			domain  = SemanticDomain.get(id_or_key)
 
-	# To search semantic space within a domain.
+			if domain is not None:
+				if SemanticDomain.unset(domain.id):
+					self.vdb.remove(domain.id)
+					removed = True
+
+			self.ww.db.commit()
+			return removed
+
+		except Exception:
+			self.ww.db.rollback()
+			raise
+
+	# Create or update document and fully reindex its atoms from full text.
+	# Strategy: remove and re-insert (DB), range-remove (VDB).
 	# ------------------------------------------------------------------
-	def search(self, query: str, vid: Vid, top_k: int = 10):
-		result = {}
-		qvec   = Semantic(query).vectors[0]
+	def set_document(
+		self,
+		domain_id    : int | str,
+		*,
+		document_key : str,
+		text         : str,
+		mtime        : int,
+		meta         : str | None = None
+	) -> int:
+		try:
+			texts, vectors = self._vectorize(text)
+			
+			document_id = SemanticDocument.set(
+				domain_id = domain_id,
+				key       = document_key,
+				mtime     = datetime.utcfromtimestamp(mtime),
+				meta      = meta
+			)
 
-		seeds = self.vdb.query(
-			vid.domain,
-			qvec,
-			top_k
-		)
+			document   = SemanticDocument.get(domain_id, document_id)
+			vector_ids = document.set_atoms(texts, vectors)
 
-		by_doc = defaultdict(list)
-		for sid in seeds:
-			v = Vid(id=sid)
-			by_doc[v.doc].append(sid)
+			if vector_ids:
+				vector_values = torch.stack(list(vectors)) if isinstance(vectors, list) else vectors
 
-		for doc_id, ids in by_doc.items():
-			semantic = Semantic('', sentencize=False)
-			semantic.load(ids)
-			result[doc_id] = semantic.search(query)
+				self.vdb.add(
+					domain_id     = domain_id,
+					vector_ids    = vector_ids,
+					vector_values = vector_values
+				)
 
-		return result
+			self.ww.db.commit()
+			return document_id
+
+		except Exception:
+			self.ww.db.rollback()
+			raise
+
+	# ------------------------------------------------------------------
+	# Remove document and all its atoms (DB + VDB)
+	# ------------------------------------------------------------------
+	def unset_document(self, domain_id: int, document_id: int) -> bool:
+		try:
+			removed  = False
+			document = SemanticDocument.get(domain_id, document_id)
+
+			if document is not None:
+				self.vdb.remove(
+					domain   = domain_id,
+					document = document_id
+				)
+				SemanticDocument.unset(domain_id, document_id)
+				removed = True
+
+			self.ww.db.commit()
+			return removed
+
+		except Exception:
+			self.ww.db.rollback()
+			raise
+
+	# ------------------------------------------------------------------
+	# List documents in domain
+	# ------------------------------------------------------------------
+	def get_documents(self, domain_id):
+		domain = SemanticDomain.get(domain_id)
+		if domain is not None:
+			return domain.get_documents()
+

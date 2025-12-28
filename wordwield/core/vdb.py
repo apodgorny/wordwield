@@ -11,13 +11,13 @@ import faiss
 import numpy as np
 
 from wordwield.core.norm import Norm
-from wordwield.core.vid  import Vid
+from wordwield.core.sid  import Sid
 
 
 class Vdb:
 	def __init__(self, dim):
 		self.dim         = dim # encoder.model.config.hidden_size
-		self.indexes     = {}  # domain → FAISS index
+		self.indexes     = {}  # domain_id → FAISS index
 		faiss.omp_set_num_threads(1)
 
 	# ======================================================================
@@ -26,44 +26,50 @@ class Vdb:
 
 	# Get (or create) FAISS index for a domain
 	# ----------------------------------------------------------------------
-	def _get_domain_index(self, domain):
-		if domain not in self.indexes:
-			self.indexes[domain] = faiss.IndexIDMap(
+	def _get_domain_index(self, domain_id):
+		if domain_id not in self.indexes:
+			self.indexes[domain_id] = faiss.IndexIDMap(
 				faiss.IndexFlatIP(self.dim)
 			)
-		return self.indexes[domain]
+		return self.indexes[domain_id]
 
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Add vector batch with explicit IDs (Vid ints)
+	# Add vector batch with explicit IDs (Sid ints)
 	# ----------------------------------------------------------------------
-	def add(self, domain, v_ids, vectors):
-		assert len(v_ids) == len(vectors)
+	def add(self, domain_id, vector_ids, vector_values):
+		assert len(vector_ids) == len(vector_values)
 
-		faiss_index = self._get_domain_index(domain)
-		faiss_vecs  = Norm.to_sphere(vectors).cpu().numpy().astype('float32')
-		faiss_index.add_with_ids(faiss_vecs, np.array(v_ids, dtype='int64'))
+		faiss_index = self._get_domain_index(domain_id)
+		faiss_vecs  = Norm.to_sphere(vector_values).cpu().numpy().astype('float32')
 
-	# Remove vectors by explicit IDs
+		faiss_index.add_with_ids(faiss_vecs, np.array(vector_ids, dtype='int64'))
+
+	# Remove all vectors belonging to a document (encoded in vector_id)
 	# ----------------------------------------------------------------------
-	def remove_ids(self, domain, v_ids):
-		if v_ids:
-			faiss_index = self._get_domain_index(domain)
-			selector = faiss.IDSelectorArray(np.array(v_ids, dtype='int64'))
-			faiss_index.remove_ids(selector)
+	def remove(self, domain_id, document_id=None):
+		faiss_index = self._get_domain_index(domain_id)
+
+		if document_id is None:
+			self.vdb.indexes.pop(domain_id, None)
+		else:
+			id_min, id_max = Sid.get_document_id_range(document_id)
+			selector = faiss.IDSelectorRange(id_min, id_max)
+
+		faiss_index.remove_ids(selector)
 
 	# Query vectors by vector, optionally restricted to doc_ids
 	# ----------------------------------------------------------------------
-	def query(self, domain, query_vector, k=5, doc_ids=None):
-		faiss_index  = self._get_domain_index(domain)
+	def query(self, domain_id, query_vector, k=5, document_ids=None):
+		faiss_index  = self._get_domain_index(domain_id)
 		query_vector = Norm.to_sphere(query_vector).reshape(1, -1)
 
 		n = max(k * 8, 64)
 		scores, ids = faiss_index.search(query_vector, n)
 
-		allowed_docs = set(doc_ids) if doc_ids is not None else None
+		allowed_docs = set(document_ids) if document_ids is not None else None
 		result       = []
 		seen         = set()
 
@@ -72,15 +78,10 @@ class Vdb:
 				ok = True
 
 				if allowed_docs is not None:
-					ok = Vid(hash=faiss_id).doc_id in allowed_docs
+					ok = Sid(faiss_id).document_id in allowed_docs
 
 				if ok and faiss_id not in seen:
 					result.append(faiss_id)
 					seen.add(faiss_id)
 
 		return result
-
-	# Number of vectors in a domain
-	# ----------------------------------------------------------------------
-	def domain_size(self, domain):
-		return self._get_domain_index(domain).ntotal

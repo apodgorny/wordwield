@@ -66,9 +66,9 @@ class WordWield(metaclass=WordWieldMeta):
 	def _warmup(cls):
 		cls.encoder = Encoder()
 		cls.log_info('Warming up encoder:')
+		cls.encoder.encode('Warmup')
 		cls.log_info(f'- Model : `{cls.encoder.model_name}`')
 		cls.log_info(f'- Dim   : {cls.encoder.dim}')
-		cls.encoder.encode('Warmup')
 
 	# Load environment from WordWield root .env with project .env overrides.
 	# ----------------------------------------------------------------------

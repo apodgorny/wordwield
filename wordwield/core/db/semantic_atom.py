@@ -4,14 +4,22 @@
 
 from datetime import datetime
 
-import numpy as np
 import torch
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, Text
+import numpy as np
+
+from sqlalchemy     import ForeignKey, Column, DateTime, Integer, LargeBinary, Text
+from sqlalchemy.orm import relationship
 
 from wordwield.core.base.record import Record
-from wordwield.core.vid         import Vid
+from wordwield.core.sid         import Sid
 
 
+# ======================================================================
+# PRIVATE METHODS
+# ======================================================================
+
+# Serialize vector to binary blob
+# ----------------------------------------------------------------------
 def vector_serialize(vector):
 	if vector is None:
 		return None
@@ -23,7 +31,8 @@ def vector_serialize(vector):
 		arr = np.asarray(vector, dtype=np.float32)
 	return arr.tobytes()
 
-
+# Deserialize vector from binary blob
+# ----------------------------------------------------------------------
 def vector_deserialize(blob):
 	if blob is None:
 		return None
@@ -37,77 +46,109 @@ def vector_deserialize(blob):
 	return torch.as_tensor(blob, dtype=torch.float32)
 
 
+# ======================================================================
+# MODEL
+# ======================================================================
+
 class SemanticAtom(Record):
 	__tablename__ = 'semantic_atom'
 
-	id      = Column(Integer,     primary_key=True)   # Canonical int_id
+	# Foreign
+	document_id = Column(
+		Integer,
+		ForeignKey('semantic_document.id', ondelete='CASCADE'),
+		nullable = False
+	)
+
+	# Local
+	id      = Column(Integer,     primary_key=True)   # Global semantic id (Sid)
 	text    = Column(Text,        nullable=False)
-	mtime   = Column(Integer,     nullable=True)
 	vector  = Column(LargeBinary, nullable=True)
 	created = Column(DateTime,    default=datetime.utcnow)
+
+	# Relationships
+	# ----------------------------------------------------------------------
+	document = relationship(
+		'SemanticDocument',
+		back_populates='atoms',
+	)
+
+	# ----------------------------------------------------------------------
+	def __repr__(self):
+		return f'<SemanticAtom id={self.id} document_id={self.document_id}>'
 
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Get one atom by address.
+	def save(self):
+		self.session.add(self)
+
+	# Get atom by semantic id
 	# ----------------------------------------------------------------------
 	@classmethod
-	def get(cls, vid: Vid | int | None = None):
-		result = {}
+	def get(cls, sid: Sid | int | None = None):
 		query  = cls.session.query(cls)
+		result = {}
 
-		if vid is not None:
-			v = vid if isinstance(vid, Vid) else Vid(id=vid)
-			query = query.filter(*v.conditions(cls.id))
+		if sid is not None:
+			v = sid if isinstance(sid, Sid) else Sid(id=sid)
+			query = query.filter(cls.id == v.id)
 
-		rows = query.all()
+		for row in query.all():
+			result[int(row.id)] = {
+				'text'   : row.text,
+				'vector' : vector_deserialize(row.vector)
+			}
 
-		for row in rows:
-			result[int(row.id)] = dict(
-				text   = row.text,
-				mtime  = row.mtime,
-				vector = vector_deserialize(row.vector)
-			)
 		return result
-	
-	# Remove one atom by address.
+
+	# Remove atom by semantic id
 	# ----------------------------------------------------------------------
 	@classmethod
-	def unset(cls, vid: Vid | int | None = None):
-		if vid is None:
-			return False
-
-		v = vid if isinstance(vid, Vid) else Vid(id=vid)
-		rows = cls.session.query(cls).filter(*v.conditions(cls.id)).all()
-
+	def unset(cls, sid: Sid | int | None = None):
 		removed = False
-		for row in rows:
-			cls.session.delete(row)
-			removed = True
+
+		if sid is not None:
+			v = sid if isinstance(sid, Sid) else Sid(id=sid)
+
+			rows = (
+				cls.session
+				.query(cls)
+				.filter(cls.id == v.id)
+				.all()
+			)
+
+			for row in rows:
+				cls.session.delete(row)
+				removed = True
 
 		return removed
 
-	# Construct and set atom from semantic components.
+	# Create or update atom from semantic id
 	# ----------------------------------------------------------------------
 	@classmethod
 	def set(
 		cls,
-		vid    : Vid | int,
+		sid    : Sid | int,
 		text   : str,
 		vector,
-		mtime  : int | None = None,
 	) -> int:
-		if vector is None: raise ValueError('Vector can not be None')
-		if text   is None: raise ValueError('Text can not be None')
-		
-		id  = vid.id if isinstance(vid, Vid) else Vid(id=vid).id
+		if text is None:
+			raise ValueError('Text can not be None')
+
+		if vector is None:
+			raise ValueError('Vector can not be None')
+
+		v = sid if isinstance(sid, Sid) else Sid(sid)
 
 		row = cls(
-			id     = id,
-			text   = text,
-			mtime  = mtime,
-			vector = vector_serialize(vector)
+			id          = v.id,
+			document_id = v.document_id,
+			text        = text,
+			vector      = vector_serialize(vector)
 		)
+
 		cls.session.merge(row)
-		return id
+
+		return int(row.id)

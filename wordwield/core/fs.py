@@ -44,7 +44,7 @@ class Directory:
 				if eligible:
 					path         = os.path.join(root, f)
 					mtime        = os.path.getmtime(path)
-					result[path] = mtime
+					result[path] = int(mtime)
 
 		return result
 
@@ -109,19 +109,17 @@ class File:
 
 	# Read file content
 	# ----------------------------------------------------------------------
-	@classmethod
-	def read(cls, path, encoding='utf-8'):
-		if File.exists(path):
-			f = File(path)
+	def read(self, encoding='utf-8'):
+		if File.exists(self.path):
+			f = File(self.path)
 			reader = f.readable.get(f.extension, f.readable['_'])
 			return reader()
 		return None
 		
 	# Write content to file
 	# ----------------------------------------------------------------------
-	@classmethod
-	def write(cls, path, content, encoding='utf-8', mode='w'):
-		f = File(path)
+	def write(self, content, encoding='utf-8', mode='w'):
+		f = File(self.path)
 		if f.extension not in f.non_writable:
 			with open(f.path, mode, encoding=encoding) as f:
 				f.write(content)
