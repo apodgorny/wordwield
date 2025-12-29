@@ -2,7 +2,7 @@
 # Domain registry (human → numeric).
 # ======================================================================
 
-from datetime import datetime
+import time
 
 from sqlalchemy import (
 	Column,
@@ -24,7 +24,7 @@ class SemanticDomain(Record):
 	id        = Column(Integer,  primary_key=True)             # 16-bit domain id
 	key       = Column(Text,     nullable=False, unique=True)  # domain name
 	meta      = Column(Text,     nullable=True)                # optional json/text
-	created   = Column(DateTime, default=datetime.utcnow)      # domain creation time
+	created   = Column(Integer,  nullable=False)               # domain creation time
 	temporary = Column(Boolean,  default=True, nullable=False) # temporary domain flag
 
 	# Constraints
@@ -52,11 +52,17 @@ class SemanticDomain(Record):
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Get domain by id or key
+	# Get domain by id
 	# ----------------------------------------------------------------------
 	@classmethod
 	def get(cls, domain_id: int | str):
 		return cls.session.query(cls).filter_by(id=domain_id).first()
+
+	# Get domain by key
+	# ----------------------------------------------------------------------
+	@classmethod
+	def get_by_key(cls, domain_key: int | str):
+		return cls.session.query(cls).filter_by(key=domain_key).first()
 
 	# Create or return existing domain id
 	# ----------------------------------------------------------------------
@@ -69,7 +75,7 @@ class SemanticDomain(Record):
 		meta      : str | None = None,
 		temporary : bool       = False
 	) -> int:
-		row = cls.get(key)
+		row = cls.get_by_key(key)
 
 		if row is None:
 			if id is None:
@@ -83,7 +89,8 @@ class SemanticDomain(Record):
 				id        = id,
 				key       = key,
 				meta      = meta,
-				temporary = temporary
+				temporary = temporary,
+				created   = int(time.time())
 			)
 
 			cls.session.add(row)

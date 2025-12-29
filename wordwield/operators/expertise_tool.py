@@ -22,7 +22,7 @@ class ExpertiseTool(Tool):
 		top_k : int
 	) -> list[str]:
 		
-		items = await ww.services.ExpertiseService.search(
+		items = ww.services.ExpertiseService.search(
 			query = query,
 			top_k = top_k
 		)

@@ -2,7 +2,7 @@
 # Document registry (id → human key) within domain.
 # ======================================================================
 
-from datetime import datetime
+import time
 
 from sqlalchemy import (
 	ForeignKey,
@@ -32,26 +32,26 @@ class SemanticDocument(Record):
 	)
 
 	# Local
-	id        = Column(Integer,  primary_key=True)             # 16-bit document id (part of Sid)
-	key       = Column(Text,     nullable=False)               # path / url / slug
-	meta      = Column(Text,     nullable=True)                # optional json/text
-	mtime     = Column(DateTime, nullable=False)               # external modification time
-	created   = Column(DateTime, default=datetime.utcnow)      # creation time
+	id        = Column(Integer,  primary_key=True)    # 16-bit document id (part of Sid)
+	key       = Column(Text,     nullable=False)      # path / url / slug
+	meta      = Column(Text,     nullable=True)       # optional json/text
+	mtime     = Column(Integer,  nullable=False)      # external modification time
+	created   = Column(Integer,  nullable=False)      # creation time
 
 	# Constraints
 	# ----------------------------------------------------------------------
 	__table_args__ = (
 		CheckConstraint(
 			'id >= 0 AND id < 65536',
-			name='ck_semantic_document_id_16bit'
+			name = 'ck_semantic_document_id_16bit'
 		),
 		UniqueConstraint(
 			'id', 'domain_id',
-			name='uq_semantic_document_id_domain'
+			name = 'uq_semantic_document_id_domain'
 		),
 		UniqueConstraint(
 			'key', 'domain_id',
-			name='uq_semantic_document_key_domain'
+			name = 'uq_semantic_document_key_domain'
 		),
 	)
 
@@ -59,34 +59,47 @@ class SemanticDocument(Record):
 	# ----------------------------------------------------------------------
 	domain = relationship(
 		'SemanticDomain',
-		back_populates='documents',
+		back_populates = 'documents',
 	)
 
 	atoms = relationship(
 		'SemanticAtom',
-		back_populates='document',
-		cascade='all, delete-orphan',
-		passive_deletes=True,
+		back_populates  = 'document',
+		cascade         = 'all, delete-orphan',
+		passive_deletes = True,
 	)
 
 	def __repr__(self):
-		return f'<SemanticDocument id={self.id} key={self.key} domain_id={self.domain_id}>'
+		return f'<SemanticDocument id={self.id} domain_id={self.domain_id} key={self.key} >'
 
 	# ======================================================================
 	# PUBLIC METHODS
 	# ======================================================================
 
-	# Get document by domain and id or key
+	# Get document by domain and id
 	# ----------------------------------------------------------------------
 	@classmethod
 	def get(
 		cls,
-		domain_id   : int | str,
-		document_id : int | str
+		domain_id   : int,
+		document_id : int
 	):
 		return cls.session.query(cls).filter_by(
 			domain_id = domain_id,
 			id        = document_id
+		).first()
+
+	# Get document by domain and key
+	# ----------------------------------------------------------------------
+	@classmethod
+	def get_by_key(
+		cls,
+		domain_id    : int,
+		document_key : str
+	):
+		return cls.session.query(cls).filter_by(
+			domain_id = domain_id,
+			key       = document_key
 		).first()
 
 	# Create or update document
@@ -97,11 +110,13 @@ class SemanticDocument(Record):
 		domain_id : int,
 		key       : str,
 		*,
-		mtime     : datetime,
+		mtime     : int,
 		meta      : str | None = None,
 		id        : int | None = None,
 	) -> int:
-		if id is None:
+		row = cls.get_by_key(domain_id, key)
+
+		if id is None or row is not None:
 			last = (
 				cls.session
 					.query(cls.id)
@@ -120,6 +135,7 @@ class SemanticDocument(Record):
 			key       = key,
 			meta      = meta,
 			mtime     = mtime,
+			created   = int(time.time())
 		)
 
 		row = cls.session.merge(row)

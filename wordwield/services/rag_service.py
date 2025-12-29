@@ -1,8 +1,6 @@
 # ======================================================================
-# RAG service coordinating semantic DB and vector DB.
+# Rag service coordinating semantic DB and vector DB.
 # ======================================================================
-
-from datetime import datetime
 
 import torch
 
@@ -13,6 +11,8 @@ from wordwield.core.db.semantic_atom      import vector_deserialize
 from wordwield.core.vdb                   import Vdb
 from wordwield.core.sid                   import Sid
 from wordwield.core.sentencizers          import PysbdSentencizer as Sentencizer
+from wordwield.libs.yo                    import yo
+
 
 
 class RagService(Service):
@@ -58,7 +58,7 @@ class RagService(Service):
 				if vector_ids:
 					vectors = torch.stack(vector_values)
 					self.vdb.add(
-						domain        = domain.id,
+						domain_id     = domain.id,
 						vector_ids    = vector_ids,
 						vector_values = vectors
 					)
@@ -132,7 +132,7 @@ class RagService(Service):
 			document_id = SemanticDocument.set(
 				domain_id = domain_id,
 				key       = document_key,
-				mtime     = datetime.utcfromtimestamp(mtime),
+				mtime     = mtime,
 				meta      = meta
 			)
 
@@ -155,7 +155,6 @@ class RagService(Service):
 			self.ww.db.rollback()
 			raise
 
-	# ------------------------------------------------------------------
 	# Remove document and all its atoms (DB + VDB)
 	# ------------------------------------------------------------------
 	def unset_document(self, domain_id: int, document_id: int) -> bool:
@@ -178,11 +177,71 @@ class RagService(Service):
 			self.ww.db.rollback()
 			raise
 
-	# ------------------------------------------------------------------
 	# List documents in domain
 	# ------------------------------------------------------------------
 	def get_documents(self, domain_id):
 		domain = SemanticDomain.get(domain_id)
 		if domain is not None:
 			return domain.get_documents()
+
+	def search_document(
+		self,
+		document,
+		query_vector,
+		max_steps = 30,
+		top_k_step = 5
+	):
+
+		vectors   = []
+		lines     = []
+		atom_ids  = []
+
+		for atom in document.atoms:
+			vector = vector_deserialize(atom.vector)
+			if vector is not None:
+				vectors.append(vector)
+				lines.append(atom.text)
+				atom_ids.append(atom.id)
+
+		if not vectors:
+			return []
+
+		vectors = yo.to_numpy(torch.stack(vectors))
+
+		res = yo.twinkle.resonators.Resonator(vectors)
+		res.step_top_k = top_k_step
+
+		res.add_facet('S', dim=0)
+		res.add_facet('D', dim=1)
+
+		idx = res.resonate(
+			query_vector,
+			max_steps = max_steps
+		)
+
+		idx = sorted(idx)
+
+		return [lines[i] for i in idx]
+
+
+	# Search
+	# ------------------------------------------------------------------
+	def search(self, domain_id, query, top_k=10):
+		domain  = SemanticDomain.get(domain_id)
+		results = {}
+
+		if domain:
+			query_vector = self.encoder.encode(query)
+			for document in domain.get_documents():
+				print(document)
+				lines = self.search_document(
+					document      = document,
+					query_vector  = yo.to_numpy(query_vector),
+					top_k_step    = top_k
+				)
+
+				if lines:
+					results[document.id] = lines
+
+		return results
 

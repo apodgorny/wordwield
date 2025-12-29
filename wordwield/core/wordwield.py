@@ -51,6 +51,7 @@ class WordWield(metaclass=WordWieldMeta):
 
 		cls._setup_env(PROJECT_NAME, PROJECT_PATH)    # Load environment variables from root and project .env into env registry.
 		cls._setup_paths(PROJECT_NAME, PROJECT_PATH)  # Resolve paths, prepare DB, and load built-in + project classes.
+		cls._setup_libs()
 		cls._warmup()                                 # Setup encoder instance to be accessible on all levels
 
 		cls._register_builtins()
@@ -126,6 +127,30 @@ class WordWield(metaclass=WordWieldMeta):
 		# Fresh log directory each init.
 		shutil.rmtree(cls.config.LOGS_DIR)
 		os.makedirs(cls.config.LOGS_DIR, exist_ok=True)
+
+	# Setup embedded runtime libraries from wordwield/libs.
+	# ----------------------------------------------------------------------
+	@classmethod
+	def _setup_libs(cls):
+		libs_root = os.path.join(cls.config.WW_PATH, 'libs')
+		is_valid  = os.path.isdir(libs_root)
+
+		if is_valid:
+			entries = os.listdir(libs_root)
+		else:
+			entries = []
+
+		for name in entries:
+			lib_path   = os.path.join(libs_root, name)
+			is_dir     = os.path.isdir(lib_path)
+			is_hidden  = name.startswith('_')
+			registered = lib_path in sys.path
+
+			if is_dir and not is_hidden and not registered:
+				sys.path.insert(0, lib_path)
+
+				if cls.verbose:
+					cls.log_info(f'Registered embedded lib: `{name}` → `{lib_path}`')
 
 	# Register all built-in classes into registries.
 	# ----------------------------------------------------------------------

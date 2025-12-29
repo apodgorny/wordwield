@@ -49,6 +49,7 @@ class ExpertiseService(Service):
 	# ------------------------------------------------------------------
 	def search(self, query, top_k=5):
 		return self.rag.search(
-			query = query,
-			top_k = k
+			domain_id = self.domain_id,
+			query     = query,
+			top_k     = top_k
 		)

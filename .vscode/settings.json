@@ -14,5 +14,43 @@
 	"python.analysis.typeCheckingMode": "off",
 	"python.analysis.reportMissingImports": "none",
 	"python.analysis.reportMissingModuleSource": "none",
-	"python.analysis.indexing": false
+	"python.analysis.indexing": false,
+
+	"editor.autoIndent": "full",
+	"editor.autoIndentOnPaste": true,
+	"editor.formatOnPaste": false,
+	"editor.insertSpaces": false,
+	"editor.detectIndentation": false,
+	"editor.trimAutoWhitespace": false,
+	"editor.stickyTab": true,
+
+	/* Disable GitHub Copilot / AI Inline Suggestions */
+	"github.copilot.enable": {
+		"*": false
+	},
+	"editor.inlineSuggest.enabled": false,
+
+	/* Disable Standard IntelliSense Popups */
+	"editor.quickSuggestions": {
+		"other": "off",
+		"comments": "off",
+		"strings": "off"
+	},
+	"editor.suggestOnTriggerCharacters": false,
+	"editor.parameterHints.enabled": false,
+
+	/* Disable Inlay Hints (Inline Type/Parameter Labels) */
+	"editor.inlayHints.enabled": "off",
+
+	/* Disable Hover Documentation Popups */
+	"editor.hover.enabled": "off",
+	
+		/* Disables the lightbulb icon (💡) that appears for "Quick Fixes" */
+	"editor.lightbulb.enabled": false,
+
+	/* Prevents hover popups from showing documentation or Quick Fix links */
+	"editor.hover.enabled": false,
+
+	/* Optional: Prevents extensions from showing extra code lens/action text */
+	"editor.codeLens": false
 }
