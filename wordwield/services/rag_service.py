@@ -221,6 +221,10 @@ class RagService(Service):
 
 		idx = sorted(idx)
 
+		print('len(lines):', len(lines))
+		print('max idx:', max(idx) if idx else None)
+
+
 		return [lines[i] for i in idx]
 
 
@@ -233,7 +237,6 @@ class RagService(Service):
 		if domain:
 			query_vector = self.encoder.encode(query)
 			for document in domain.get_documents():
-				print(document)
 				lines = self.search_document(
 					document      = document,
 					query_vector  = yo.to_numpy(query_vector),
@@ -241,7 +244,7 @@ class RagService(Service):
 				)
 
 				if lines:
-					results[document.id] = lines
+					results[document.key] = lines
 
 		return results
 

@@ -26,5 +26,4 @@ class ExpertiseTool(Tool):
 			query = query,
 			top_k = top_k
 		)
-
 		return items
