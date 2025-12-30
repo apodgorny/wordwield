@@ -164,8 +164,8 @@ class RagService(Service):
 
 			if document is not None:
 				self.vdb.remove(
-					domain   = domain_id,
-					document = document_id
+					domain_id   = domain_id,
+					document_id = document_id
 				)
 				SemanticDocument.unset(domain_id, document_id)
 				removed = True
@@ -188,19 +188,19 @@ class RagService(Service):
 		self,
 		document,
 		query_vector,
-		max_steps = 30,
-		top_k_step = 5
+		max_steps,
+		step_top_k
 	):
 
 		vectors   = []
-		lines     = []
+		texts     = []
 		atom_ids  = []
 
 		for atom in document.atoms:
 			vector = vector_deserialize(atom.vector)
 			if vector is not None:
 				vectors.append(vector)
-				lines.append(atom.text)
+				texts.append(atom.text)
 				atom_ids.append(atom.id)
 
 		if not vectors:
@@ -208,29 +208,30 @@ class RagService(Service):
 
 		vectors = yo.to_numpy(torch.stack(vectors))
 
-		res = yo.twinkle.resonators.Resonator(vectors)
-		res.step_top_k = top_k_step
+		# res = yo.twinkle.Resonator(vectors)
+		# res.step_top_k = step_top_k
 
-		res.add_facet('S', dim=0)
-		res.add_facet('D', dim=1)
+		# res.add_facet('S', dim=0)
+		# res.add_facet('D', dim=1)
+		# res.facets['D'].input(query_vector)
 
-		idx = res.resonate(
-			query_vector,
-			max_steps = max_steps
-		)
+		# idx = res.resonate(
+		# 	query_vector,
+		# 	max_steps = max_steps
+		# )
 
-		idx = sorted(idx)
+		# step_ids = find_step_ids(lines)
+		# idx = sorted(step_ids)
+		# idx = res.test(step_ids, top_k=20)
 
-		print('len(lines):', len(lines))
-		print('max idx:', max(idx) if idx else None)
+		retriever = yo.retrievers.SentenceRetriever(texts, vectors, max_steps, step_top_k)
 
-
-		return [lines[i] for i in idx]
+		return retriever.retrieve(query_vector)
 
 
 	# Search
 	# ------------------------------------------------------------------
-	def search(self, domain_id, query, top_k=10):
+	def search(self, domain_id, query, top_k, max_steps):
 		domain  = SemanticDomain.get(domain_id)
 		results = {}
 
@@ -240,7 +241,8 @@ class RagService(Service):
 				lines = self.search_document(
 					document      = document,
 					query_vector  = yo.to_numpy(query_vector),
-					top_k_step    = top_k
+					step_top_k    = top_k,
+					max_steps     = max_steps
 				)
 
 				if lines:
