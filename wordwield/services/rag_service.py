@@ -14,6 +14,42 @@ from wordwield.core.sentencizers          import PysbdSentencizer as Sentencizer
 from wordwield.libs.yo                    import yo
 
 
+def make_halt_sentence_stability(
+	top_k,
+	facet_name = 'f_sentence_out',
+	patience   = 1
+):
+	"""
+	Halt when top_k sentence indices stop changing.
+
+	patience = how many consecutive identical steps are required
+	"""
+
+	last_set     = None
+	stable_steps = 0
+
+	def halt(**facets):
+		nonlocal last_set, stable_steps
+
+		kernel = facets.get(facet_name)
+		if kernel is None:
+			return False
+
+		# Take top-k indices
+		idx = np.argsort(np.abs(kernel))[-top_k:]
+		curr_set = set(idx.tolist())
+
+		if curr_set == last_set:
+			stable_steps += 1
+		else:
+			stable_steps = 0
+			last_set     = curr_set
+
+		return stable_steps >= patience
+
+	return halt
+
+
 
 class RagService(Service):
 
@@ -189,7 +225,7 @@ class RagService(Service):
 		document,
 		query_vector,
 		max_steps,
-		step_top_k
+		top_k
 	):
 
 		vectors   = []
@@ -208,25 +244,35 @@ class RagService(Service):
 
 		vectors = yo.to_numpy(torch.stack(vectors))
 
-		# res = yo.twinkle.Resonator(vectors)
-		# res.step_top_k = step_top_k
+		# --------------------------------------------------------------
+		# Build SentenceRetriever from YAML via Twinkle
+		# --------------------------------------------------------------
 
-		# res.add_facet('S', dim=0)
-		# res.add_facet('D', dim=1)
-		# res.facets['D'].input(query_vector)
+		twinkler = yo.twinkle.Twinkler.assemble(
+			config   = yo.twinkle.apps.sentence_retriever,
+			document = vectors,
+			query    = query_vector,
+			affinity = yo.kernels.Affinity(vectors)
+		)
 
-		# idx = res.resonate(
-		# 	query_vector,
-		# 	max_steps = max_steps
-		# )
+		mask = twinkler.twinkle(
+			max_tics = max_steps,
+			top_k    = top_k
+		)
 
-		# step_ids = find_step_ids(lines)
-		# idx = sorted(step_ids)
-		# idx = res.test(step_ids, top_k=20)
+		# # idx сейчас — это НЕ indices, а history / output
+		# # предполагаем, что sentence_out — последний mask
+		# mask = twinkler.facets['f_sentence_out'].output()
 
-		retriever = yo.retrievers.SentenceRetriever(texts, vectors, max_steps, step_top_k)
+		idx = self._score(
+			mask         = mask,
+			vectors      = vectors,
+			query_vector = query_vector,
+			top_k        = top_k
+		)
 
-		return retriever.retrieve(query_vector)
+		lines = [(i, texts[i]) for i in sorted(idx)]
+		return lines
 
 
 	# Search
@@ -241,8 +287,8 @@ class RagService(Service):
 				lines = self.search_document(
 					document      = document,
 					query_vector  = yo.to_numpy(query_vector),
-					step_top_k    = top_k,
-					max_steps     = max_steps
+					max_steps     = max_steps,
+					top_k         = top_k
 				)
 
 				if lines:
@@ -250,3 +296,37 @@ class RagService(Service):
 
 		return results
 
+
+	def _score(
+		self,
+		mask,
+		vectors,
+		query_vector,
+		top_k,
+		threshold = 0.85,
+		min_candidates = 8
+	):
+		import numpy as np
+
+		# Phase 1: structural filtering
+		candidates = [i for i, v in enumerate(mask) if v >= threshold]
+
+		if len(candidates) < min_candidates:
+			candidates = sorted(
+				range(len(mask)),
+				key=lambda i: mask[i],
+				reverse=True
+			)[:max(top_k * 3, min_candidates)]
+
+		# Phase 2: semantic alignment
+		q = query_vector / (np.linalg.norm(query_vector) + 1e-9)
+
+		scored = []
+		for i in candidates:
+			v = vectors[i]
+			v = v / (np.linalg.norm(v) + 1e-9)
+			score = float((q * v).sum())
+			scored.append((i, score))
+
+		scored.sort(key=lambda x: x[1], reverse=True)
+		return [i for i, _ in scored[:top_k]]

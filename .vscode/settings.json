@@ -46,7 +46,7 @@
 	"editor.hover.enabled": "off",
 	
 		/* Disables the lightbulb icon (💡) that appears for "Quick Fixes" */
-	"editor.lightbulb.enabled": false,
+	"editor.lightbulb.enabled": "off",
 
 	/* Prevents hover popups from showing documentation or Quick Fix links */
 	"editor.hover.enabled": false,

@@ -1,0 +1,20 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "WordWield (jarvis)",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/projects/ridges/main.py",
+			"console": "integratedTerminal",
+			"justMyCode": false,
+			"cwd": "${workspaceFolder}",
+			"python": "/Users/alexander/vnv/jarvis/bin/python",
+			"env": {
+				"VIRTUAL_ENV": "/Users/alexander/vnv/jarvis",
+				"PATH": "/Users/alexander/vnv/jarvis/bin:${env:PATH}",
+				"PYTHONPATH": "${workspaceFolder}"
+			}
+		}
+	]
+}
